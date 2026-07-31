@@ -23,6 +23,11 @@ let package = Package(
         .testTarget(
             name: "FoliumTests",
             dependencies: ["Folium"]
+        ),
+        .testTarget(
+            name: "FoliumIntegrationTests",
+            dependencies: ["Folium"],
+            resources: [.copy("Fixtures")]
         )
     ]
 )

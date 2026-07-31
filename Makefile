@@ -15,9 +15,37 @@ CONTENTS    := $(APP_BUNDLE)/Contents
 INSTALL_DIR := /Applications
 INSTALLED   := $(INSTALL_DIR)/$(APP_NAME).app
 
-.PHONY: all build bundle install uninstall clean
+.PHONY: all build bundle install uninstall clean \
+        check lint vet test test-unit test-integration
 
 all: bundle
+
+## Run every Definition-of-Done gate: lint, vet, unit tests, integration tests.
+## See docs/agents/definition-of-done.md.
+check: lint vet test-unit test-integration
+	@echo "All quality gates passed."
+
+## Style/convention linting (fails on any violation).
+lint:
+	@command -v swiftlint >/dev/null 2>&1 || { \
+		echo "swiftlint not found. Install it with: brew install swiftlint"; exit 1; }
+	swiftlint lint --strict
+
+## Static analysis: compile all targets with warnings treated as errors
+## (the closest Swift equivalent of `go vet`).
+vet:
+	swift build --build-tests -Xswiftc -warnings-as-errors
+
+## Run both test suites.
+test: test-unit test-integration
+
+## Fast, isolated unit tests.
+test-unit:
+	swift test --filter FoliumTests
+
+## Integration tests that exercise the file-to-render pipeline end to end.
+test-integration:
+	swift test --filter FoliumIntegrationTests
 
 ## Compile the release binary.
 build:

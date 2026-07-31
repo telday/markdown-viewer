@@ -1,3 +1,10 @@
+## Definition of Done
+
+Every code change must pass all four quality gates — lint, vet, unit tests, and
+integration tests — before the work is done. Run `make check` (or the
+individual `make lint` / `make vet` / `make test-unit` / `make test-integration`
+recipes). See `docs/agents/definition-of-done.md`.
+
 ## Agent skills
 
 ### Issue tracker

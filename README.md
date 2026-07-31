@@ -35,3 +35,16 @@ open /Applications/Folium.app
   installing.
 - `make uninstall` — remove `/Applications/Folium.app`.
 - `make clean` — remove build artifacts and the local bundle.
+
+## Development
+
+### Quality gates
+
+`make check` runs the four gates that make up the Definition of Done for any
+code change (see [`docs/agents/definition-of-done.md`](docs/agents/definition-of-done.md)):
+
+- `make lint` — SwiftLint (`--strict`); requires `brew install swiftlint`.
+- `make vet` — compiles all targets with warnings treated as errors (the Swift
+  equivalent of `go vet`).
+- `make test-unit` — fast, isolated unit tests.
+- `make test-integration` — end-to-end file-to-render pipeline tests.
