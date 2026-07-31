@@ -1,9 +1,14 @@
 ## Definition of Done
 
-Every code change must pass all four quality gates — lint, vet, unit tests, and
-integration tests — before the work is done. Run `make check` (or the
-individual `make lint` / `make vet` / `make test-unit` / `make test-integration`
-recipes). See `docs/agents/definition-of-done.md`.
+Every code change must pass all quality gates before the work is done: lint,
+vet, unit tests, integration tests, and **≥97% unit-test line coverage on the
+logic layer**. Run `make check` (or the individual `make lint` / `make vet` /
+`make test-unit` / `make test-integration` / `make coverage` recipes).
+
+Keep real logic (parsing, rendering, decoding, business rules) in plain,
+unit-testable types with no SwiftUI/AppKit/WebKit dependency — the UI/host-glue
+files are excluded from the coverage requirement and must stay thin. See
+`docs/agents/definition-of-done.md`.
 
 ## Agent skills
 

@@ -16,13 +16,13 @@ INSTALL_DIR := /Applications
 INSTALLED   := $(INSTALL_DIR)/$(APP_NAME).app
 
 .PHONY: all build bundle install uninstall clean \
-        check lint vet test test-unit test-integration
+        check lint vet test test-unit test-integration coverage
 
 all: bundle
 
-## Run every Definition-of-Done gate: lint, vet, unit tests, integration tests.
+## Run every Definition-of-Done gate: lint, vet, unit + integration tests, coverage.
 ## See docs/agents/definition-of-done.md.
-check: lint vet test-unit test-integration
+check: lint vet test-unit test-integration coverage
 	@echo "All quality gates passed."
 
 ## Style/convention linting (fails on any violation).
@@ -46,6 +46,11 @@ test-unit:
 ## Integration tests that exercise the file-to-render pipeline end to end.
 test-integration:
 	swift test --filter FoliumIntegrationTests
+
+## Enforce >=97% unit-test line coverage on the logic layer. Prints the
+## excluded UI/host-glue files on every run. See scripts/coverage.sh.
+coverage:
+	./scripts/coverage.sh
 
 ## Compile the release binary.
 build:

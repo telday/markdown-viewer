@@ -48,3 +48,7 @@ code change (see [`docs/agents/definition-of-done.md`](docs/agents/definition-of
   equivalent of `go vet`).
 - `make test-unit` — fast, isolated unit tests.
 - `make test-integration` — end-to-end file-to-render pipeline tests.
+- `make coverage` — enforces ≥97% unit-test line coverage on the logic layer
+  (UI/host-glue files are excluded and listed on every run).
+
+CI runs `make check` on every pull request (`.github/workflows/ci.yml`).
