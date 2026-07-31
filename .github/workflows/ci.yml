@@ -12,12 +12,16 @@ concurrency:
 jobs:
   check:
     name: Quality gates
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
 
-      - name: Select Xcode 16
-        run: sudo xcode-select -s /Applications/Xcode_16.app
+      # Package.swift is swift-tools-version 6.0, which needs Xcode 16+.
+      # Select the newest Xcode present rather than hard-coding a point version.
+      - name: Select latest Xcode
+        run: |
+          latest=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$latest" ]; then sudo xcode-select -s "$latest"; fi
 
       - name: Show toolchain
         run: swift --version
