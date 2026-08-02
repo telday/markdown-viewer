@@ -19,11 +19,10 @@ struct MarkdownDocument: FileDocument {
     }
 
     init(configuration: ReadConfiguration) throws {
-        guard let data = configuration.file.regularFileContents,
-              let string = String(data: data, encoding: .utf8) else {
+        guard let data = configuration.file.regularFileContents else {
             throw CocoaError(.fileReadCorruptFile)
         }
-        text = string
+        text = try MarkdownLoading.text(fromUTF8: data)
     }
 
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {

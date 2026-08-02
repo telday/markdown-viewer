@@ -1,0 +1,15 @@
+# SwiftLint configuration for Folium.
+# `make lint` runs `swiftlint lint --strict`, so any violation fails the gate.
+included:
+  - Sources
+  - Tests
+
+opt_in_rules:
+  - empty_count
+  - closure_spacing
+  - explicit_init
+  - first_where
+
+line_length:
+  warning: 120
+  error: 160
