@@ -37,4 +37,19 @@ struct RenderPipelineTests {
         // Autolink
         #expect(html.contains(#"<a href="https://folium.example">https://folium.example</a>"#))
     }
+
+    @Test func stylesTheRenderedDocumentEndToEnd() throws {
+        // Exercises the exact composition `FoliumApp` performs on open: render
+        // the fixture, then wrap it in the styled HTML document.
+        let bodyHTML = try renderFixture("sample")
+        let page = MarkdownPage.html(bodyHTML: bodyHTML)
+
+        // The rendered content survives the wrapping...
+        #expect(page.contains("<h1>Folium Sample</h1>"))
+        #expect(page.contains("<table>"))
+        // ...inside a full, GitHub-styled document.
+        #expect(page.hasPrefix("<!DOCTYPE html>"))
+        #expect(page.contains(#"class="markdown-body""#))
+        #expect(page.contains("@media (prefers-color-scheme: dark)"))
+    }
 }

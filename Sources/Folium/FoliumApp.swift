@@ -4,7 +4,8 @@ import SwiftUI
 struct FoliumApp: App {
     var body: some Scene {
         DocumentGroup(viewing: MarkdownDocument.self) { configuration in
-            MarkdownWebView(html: MarkdownRenderer.renderHTML(from: configuration.document.text))
+            let bodyHTML = MarkdownRenderer.renderHTML(from: configuration.document.text)
+            MarkdownWebView(html: MarkdownPage.html(bodyHTML: bodyHTML))
         }
     }
 }
