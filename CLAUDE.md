@@ -10,6 +10,11 @@ unit-testable types with no SwiftUI/AppKit/WebKit dependency — the UI/host-glu
 files are excluded from the coverage requirement and must stay thin. See
 `docs/agents/definition-of-done.md`.
 
+For *how* to test — especially rendering/styling, where output is HTML+CSS
+interpreted by WebKit — see `docs/agents/testing.md`. The rule of thumb: test the
+seam this app owns (wiring, integration decisions), not the values our
+dependencies (cmark-gfm, GitHub's CSS) already test.
+
 ## Agent skills
 
 ### Issue tracker
