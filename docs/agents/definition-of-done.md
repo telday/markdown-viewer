@@ -1,5 +1,9 @@
 # Definition of Done
 
+> This doc defines *which gates must pass*. For *how to test* — the tiers of
+> rendering tests, what's worth asserting vs. what's a dependency's job, and
+> where each kind of test lives — see [testing.md](testing.md).
+
 Every code change made by an agent must pass all four quality gates before it
 is considered done (before opening or updating a PR, and before claiming the
 work is complete). Run them all with:
