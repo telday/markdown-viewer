@@ -38,6 +38,22 @@ open /Applications/Folium.app
 
 ## Development
 
+### Vendored third-party assets
+
+Folium vendors highlight.js (see [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md))
+so there's no CDN dependency at runtime. The actual files aren't committed:
+`make vendor` — a prerequisite of `build`/`vet`/`test-unit`/`test-integration`/
+`coverage`, so `make build` and `make check` handle it automatically —
+regenerates `Sources/Folium/Vendor/` from the pinned version in
+[`vendor/package.json`](vendor/package.json) (a real npm manifest Dependabot
+tracks for version bumps and security advisories). Requires `npm` (e.g.
+`brew install node`), but only hits the network on the first run or after a
+version bump; otherwise it's a no-op.
+
+**A bare `swift build` / `swift test` / `swift run` (bypassing `make`) needs
+`make vendor` run at least once first**, since those resource files won't
+exist yet.
+
 ### Quality gates
 
 `make check` runs the four gates that make up the Definition of Done for any

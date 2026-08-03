@@ -15,7 +15,7 @@ CONTENTS    := $(APP_BUNDLE)/Contents
 INSTALL_DIR := /Applications
 INSTALLED   := $(INSTALL_DIR)/$(APP_NAME).app
 
-.PHONY: all build bundle install uninstall clean \
+.PHONY: all build bundle install uninstall clean vendor \
         check lint vet test test-unit test-integration coverage
 
 all: bundle
@@ -33,27 +33,35 @@ lint:
 
 ## Static analysis: compile all targets with warnings treated as errors
 ## (the closest Swift equivalent of `go vet`).
-vet:
+vet: vendor
 	swift build --build-tests -Xswiftc -warnings-as-errors
 
 ## Run both test suites.
 test: test-unit test-integration
 
 ## Fast, isolated unit tests.
-test-unit:
+test-unit: vendor
 	swift test --filter FoliumTests
 
 ## Integration tests that exercise the file-to-render pipeline end to end.
-test-integration:
+test-integration: vendor
 	swift test --filter FoliumIntegrationTests
 
 ## Enforce >=97% unit-test line coverage on the logic layer. Prints the
 ## excluded UI/host-glue files on every run. See scripts/coverage.sh.
-coverage:
+coverage: vendor
 	./scripts/coverage.sh
 
+## Regenerate vendored third-party JS/CSS (Sources/Folium/Vendor/, gitignored)
+## from vendor/package.json's pinned versions. A no-op once already current,
+## so this is cheap to list as a prerequisite everywhere `swift build`/`swift
+## test` runs. A bare `swift build` (bypassing make) needs this run first.
+## See scripts/vendor-highlightjs.sh.
+vendor:
+	./scripts/vendor-highlightjs.sh
+
 ## Compile the release binary.
-build:
+build: vendor
 	swift build -c $(CONFIG)
 
 ## Assemble and ad-hoc sign $(APP_BUNDLE) from the release binary.

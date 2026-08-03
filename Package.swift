@@ -18,6 +18,11 @@ let package = Package(
             dependencies: [
                 .product(name: "cmark-gfm", package: "swift-cmark"),
                 .product(name: "cmark-gfm-extensions", package: "swift-cmark")
+            ],
+            resources: [
+                // Vendored by scripts/vendor-highlightjs.sh (`make vendor`),
+                // gitignored — see that script and vendor/package.json.
+                .copy("Vendor/HighlightJS")
             ]
         ),
         .testTarget(

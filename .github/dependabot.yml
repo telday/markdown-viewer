@@ -1,0 +1,15 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: "/vendor"
+    schedule:
+      interval: weekly
+    # This manifest tracks highlight.js (see vendor/package.json's "//" key)
+    # for version-bump PRs and security advisories. It isn't consumed
+    # directly — scripts/vendor-highlightjs.sh regenerates
+    # Sources/Folium/Vendor/HighlightJS/ from it as part of `make build`.
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly

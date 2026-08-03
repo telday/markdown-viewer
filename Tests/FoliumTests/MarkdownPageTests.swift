@@ -50,4 +50,34 @@ struct MarkdownPageTests {
         #expect(css.contains(".markdown-body hr"))
         #expect(css.contains(".markdown-body a"))
     }
+
+    // MARK: - Code blocks (issue #4)
+
+    @Test func embedsHighlightJSAndItsThemeWithNoCDNReference() {
+        let page = MarkdownPage.html(bodyHTML: "")
+
+        #expect(page.contains(HighlightJS.script))
+        #expect(page.contains(HighlightJSTheme.css))
+        #expect(page.contains(CodeBlockStylesheet.css))
+        // Vendored locally: no <script src="..."> pointing off-device.
+        #expect(!page.contains("<script src="))
+        #expect(!page.contains("cdn"))
+    }
+
+    @Test func embedsTheCopyButtonWiringScript() {
+        let page = MarkdownPage.html(bodyHTML: "")
+        #expect(page.contains(CodeBlockScript.script))
+    }
+
+    @Test func decoratesCodeBlocksInTheRenderedBody() {
+        let bodyHTML = #"<pre><code class="language-swift">let x = 1\n</code></pre>"#
+        let page = MarkdownPage.html(bodyHTML: bodyHTML)
+
+        // The full pipeline runs the body through CodeBlockDecorator, not just
+        // MarkdownPage's own literal template — drift here would silently ship
+        // fenced code with no chrome at all.
+        #expect(page.contains(#"class="code-block""#))
+        #expect(page.contains(#"<span class="code-block-lang">swift</span>"#))
+        #expect(page.contains(#"<button type="button" class="copy-button">Copy</button>"#))
+    }
 }
