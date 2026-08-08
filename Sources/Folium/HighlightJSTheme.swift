@@ -5,12 +5,12 @@
 /// (issue #3's pattern, reused here for issue #4).
 enum HighlightJSTheme {
     static let css: String = {
-        let light = BundledAsset.contents(
+        let light = VendoredAsset.contents(
             resource: "github.min",
             extension: "css",
             subdirectory: "HighlightJS/styles"
         )
-        let dark = BundledAsset.contents(
+        let dark = VendoredAsset.contents(
             resource: "github-dark.min",
             extension: "css",
             subdirectory: "HighlightJS/styles"

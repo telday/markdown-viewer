@@ -8,9 +8,9 @@
 /// `--borderDefault`, etc.) so light/dark tracking is automatic, with no
 /// separate `prefers-color-scheme` block needed here.
 ///
-/// Authored as a real file (`Sources/Folium/Resources/code-block.css`, read
-/// via `BundledAsset`) rather than a Swift string literal — see
+/// Authored as a real file (`Sources/Folium/Resources/code-block.css`),
+/// compiled in via `.embedInCode` as `PackageResources.code_block_css` — see
 /// `GitHubStylesheet` for why.
 enum CodeBlockStylesheet {
-    static let css = BundledAsset.contents(resource: "code-block", extension: "css", subdirectory: "Resources")
+    static let css = EmbeddedAsset.string(PackageResources.code_block_css)
 }

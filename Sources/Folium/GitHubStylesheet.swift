@@ -9,9 +9,12 @@
 /// declares `<meta name="color-scheme" content="light dark">` so WKWebView
 /// honors the system setting).
 ///
-/// Authored as a real file (`Sources/Folium/Resources/github.css`, read via
-/// `BundledAsset`) rather than a Swift string literal, so it gets real CSS
-/// editor tooling instead of living inside `.swift` source.
+/// Authored as a real file (`Sources/Folium/Resources/github.css`) rather
+/// than a Swift string literal, so it gets real CSS editor tooling instead
+/// of living inside `.swift` source. `Package.swift` declares that directory
+/// `.embedInCode`, so SPM compiles its bytes directly into the binary as
+/// `PackageResources.github_css` — no runtime bundle lookup, and a typo'd
+/// resource name is a compile error rather than a `fatalError`.
 enum GitHubStylesheet {
-    static let css = BundledAsset.contents(resource: "github", extension: "css", subdirectory: "Resources")
+    static let css = EmbeddedAsset.string(PackageResources.github_css)
 }

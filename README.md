@@ -40,9 +40,9 @@ open /Applications/Folium.app
 
 ### Page assets: vendored vs. first-party
 
-The rendered page's CSS/JS is real `.css`/`.js` files under `Sources/Folium/`,
-read into the app at build time via `BundledAsset` + SPM resources rather
-than baked into Swift string literals — two kinds:
+The rendered page's CSS/JS is real `.css`/`.js` files under `Sources/Folium/`
+rather than baked into Swift string literals — two kinds, handled
+differently:
 
 - **Third-party, vendored**: highlight.js (see
   [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md)), so there's no CDN
@@ -53,15 +53,21 @@ than baked into Swift string literals — two kinds:
   [`vendor/package.json`](vendor/package.json) (a real npm manifest Dependabot
   tracks for version bumps and security advisories). Requires `npm` (e.g.
   `brew install node`), but only hits the network on the first run or after a
-  version bump; otherwise it's a no-op.
+  version bump; otherwise it's a no-op. Read at runtime via `VendoredAsset` +
+  a `.copy` SPM resource: `highlight.min.js` is close to the resource size
+  where SPM's compile-time embedding has reported slow debug builds, so it
+  stays on the runtime-read path.
 - **First-party, authored here**: the base GitHub-matching stylesheet, the
   code-block chrome, and the copy-button script live as ordinary committed
   files under `Sources/Folium/Resources/` — no build step, just real CSS/JS
-  editor tooling instead of Swift string literals.
+  editor tooling instead of Swift string literals. Declared `.embedInCode` in
+  `Package.swift`, so SPM compiles their bytes directly into the binary as
+  `PackageResources.xxx` constants (decoded via `EmbeddedAsset`) — no runtime
+  bundle lookup, and a typo'd resource name is a compile error.
 
 **A bare `swift build` / `swift test` / `swift run` (bypassing `make`) needs
-`make vendor` run at least once first**, since those resource files won't
-exist yet.
+`make vendor` run at least once first**, since the vendored (not first-party)
+resource files won't exist yet.
 
 ### Quality gates
 

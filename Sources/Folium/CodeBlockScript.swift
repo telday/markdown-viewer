@@ -11,9 +11,9 @@
 /// and `navigator.clipboard` is unavailable there — there's no secure-context
 /// path to fall back from.
 ///
-/// Authored as a real file (`Sources/Folium/Resources/code-block.js`, read
-/// via `BundledAsset`) rather than a Swift string literal — see
+/// Authored as a real file (`Sources/Folium/Resources/code-block.js`),
+/// compiled in via `.embedInCode` as `PackageResources.code_block_js` — see
 /// `GitHubStylesheet` for why.
 enum CodeBlockScript {
-    static let script = BundledAsset.contents(resource: "code-block", extension: "js", subdirectory: "Resources")
+    static let script = EmbeddedAsset.string(PackageResources.code_block_js)
 }
