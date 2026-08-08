@@ -13,7 +13,7 @@ enum HighlightJS {
     /// Subdirectory is "HighlightJS", not "Vendor/HighlightJS": SPM's
     /// `.copy("Vendor/HighlightJS")` resource places the copied directory at
     /// the bundle root by its own basename, dropping the source-side prefix.
-    static let script = VendoredAsset.contents(
+    static let script = BundledAsset.contents(
         resource: "highlight.min",
         extension: "js",
         subdirectory: "HighlightJS"

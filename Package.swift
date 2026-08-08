@@ -22,7 +22,9 @@ let package = Package(
             resources: [
                 // Vendored by scripts/vendor-highlightjs.sh (`make vendor`),
                 // gitignored — see that script and vendor/package.json.
-                .copy("Vendor/HighlightJS")
+                .copy("Vendor/HighlightJS"),
+                // First-party CSS/JS, committed directly — see BundledAsset.
+                .copy("Resources")
             ]
         ),
         .testTarget(
