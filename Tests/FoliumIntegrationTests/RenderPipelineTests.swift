@@ -40,16 +40,16 @@ struct RenderPipelineTests {
 
     @Test func stylesTheRenderedDocumentEndToEnd() throws {
         // Exercises the exact composition `FoliumApp` performs on open: render
-        // the fixture, then wrap it in the styled HTML document.
+        // the fixture, then build the injection script `MarkdownWebView` sends
+        // into its already-loaded, GitHub-styled shell.
         let bodyHTML = try renderFixture("sample")
-        let page = MarkdownPage.html(bodyHTML: bodyHTML)
+        let script = MarkdownPage.renderBodyScript(bodyHTML: bodyHTML)
 
-        // The rendered content survives the wrapping...
-        #expect(page.contains("<h1>Folium Sample</h1>"))
-        #expect(page.contains("<table>"))
-        // ...inside a full, GitHub-styled document.
-        #expect(page.hasPrefix("<!DOCTYPE html>"))
-        #expect(page.contains(#"class="markdown-body""#))
-        #expect(page.contains("@media (prefers-color-scheme: dark)"))
+        // The rendered content survives decoration and JSON-escaping ("/" comes
+        // through escaped as "\/" in closing tags — see MarkdownPageTests)...
+        #expect(script.contains(#"<h1>Folium Sample<\/h1>"#))
+        #expect(script.contains("<table>"))
+        // ...wrapped in the call that injects it into the shell's container.
+        #expect(script.hasPrefix(#"window.FoliumRenderBody(""#))
     }
 }
