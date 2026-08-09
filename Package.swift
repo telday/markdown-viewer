@@ -21,17 +21,10 @@ let package = Package(
             ],
             resources: [
                 // Vendored by scripts/vendor-highlightjs.sh (`make vendor`),
-                // gitignored — see that script and vendor/package.json. Kept
-                // on .copy + runtime Bundle.module read (BundledAsset)
-                // rather than .embedInCode: highlight.min.js is close to the
-                // resource size where .embedInCode has reported slow debug
-                // builds (github.com/swiftlang/swift/issues/75288).
+                // gitignored — see that script and vendor/package.json.
                 .copy("Vendor/HighlightJS"),
-                // First-party CSS/JS, committed directly, small enough that
-                // .embedInCode's compile-time embedding (real, type-safe
-                // PackageResources.xxx constants — see GitHubStylesheet) has
-                // no measurable build-time cost.
-                .embedInCode("Resources")
+                // First-party CSS/JS, committed directly.
+                .copy("Resources")
             ]
         ),
         .testTarget(

@@ -2,9 +2,9 @@ import Foundation
 
 /// Wraps every fenced/indented code block cmark-gfm emits (`<pre><code
 /// class="language-X">...</code></pre>`, or the same without the class for
-/// unlabeled blocks) in the chrome `CodeBlockStylesheet` styles: a header bar
-/// with the declared language and a Copy button, ready for `CodeBlockScript`
-/// to wire up at runtime.
+/// unlabeled blocks) in the chrome `Resources/code-block.css` styles: a
+/// header bar with the declared language and a Copy button, ready for
+/// `Resources/code-block.js` to wire up at runtime.
 ///
 /// Plain string transformation with no WebKit dependency, so it lives in the
 /// unit-testable logic layer alongside `MarkdownRenderer` and `MarkdownPage`.

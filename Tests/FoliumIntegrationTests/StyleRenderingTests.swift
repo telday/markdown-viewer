@@ -21,7 +21,7 @@ struct StyleRenderingTests {
     /// list item (whose `:has()` selector matches our class-less `<li>`).
     @Test func stylesheetAppliesToTheRenderedDocument() async throws {
         let body = MarkdownRenderer.renderHTML(from: "# Title\n\n- [ ] todo\n- [x] done")
-        let webView = try await loadedWebView(html: MarkdownPage.html(bodyHTML: body))
+        let webView = try await loadedWebView(bodyHTML: body)
 
         // `.markdown-body h1` gives every h1 a bottom border: proves the wrapper's
         // class matches the sheet's selectors (drift here silently unstyles all).
@@ -41,10 +41,8 @@ struct StyleRenderingTests {
     /// the view's effective appearance. Assert the canvas background actually
     /// differs between the two system appearances (not the specific hex values).
     @Test func backgroundFollowsSystemAppearance() async throws {
-        let page = MarkdownPage.html(bodyHTML: "<p>hi</p>")
-
-        let light = try await loadedWebView(html: page, appearance: .aqua)
-        let dark = try await loadedWebView(html: page, appearance: .darkAqua)
+        let light = try await loadedWebView(bodyHTML: "<p>hi</p>", appearance: .aqua)
+        let dark = try await loadedWebView(bodyHTML: "<p>hi</p>", appearance: .darkAqua)
 
         let lightBackground = try await computedStyle(light, selector: "body", property: "background-color")
         let darkBackground = try await computedStyle(dark, selector: "body", property: "background-color")
@@ -58,16 +56,22 @@ struct StyleRenderingTests {
 
     // MARK: - Helpers
 
+    /// Mirrors what `MarkdownWebView` does: load the static shell once via
+    /// `loadFileURL` (the only API that grants sibling local-file read
+    /// access — see `MarkdownWebView`'s doc comment), then inject content
+    /// via `evaluateJavaScript` the same way `MarkdownWebViewState` drives
+    /// production updates, rather than any test-only shortcut.
     private func loadedWebView(
-        html: String,
+        bodyHTML: String,
         appearance: NSAppearance.Name = .aqua
     ) async throws -> WKWebView {
         let webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 1012, height: 800))
         webView.appearance = NSAppearance(named: appearance)
         let waiter = NavigationWaiter()
         webView.navigationDelegate = waiter
-        webView.loadHTMLString(html, baseURL: nil)
+        webView.loadFileURL(MarkdownPage.pageURL, allowingReadAccessTo: MarkdownPage.resourceBaseURL)
         await waiter.waitUntilFinished()
+        _ = try await webView.evaluateJavaScript(MarkdownPage.renderBodyScript(bodyHTML: bodyHTML))
         return webView
     }
 
@@ -83,7 +87,8 @@ struct StyleRenderingTests {
 }
 
 /// Bridges `WKNavigationDelegate`'s completion callback to `async/await` so a
-/// test can wait for `loadHTMLString` to finish before reading computed styles.
+/// test can wait for `loadFileURL` to finish before injecting content and
+/// reading computed styles.
 @MainActor
 private final class NavigationWaiter: NSObject, WKNavigationDelegate {
     private var continuation: CheckedContinuation<Void, Never>?

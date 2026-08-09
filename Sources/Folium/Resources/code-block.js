@@ -1,9 +1,18 @@
-(function () {
+// Defines window.FoliumRenderBody(html) rather than running once at page
+// load: the page shell (page.html) loads a single time per WKWebView, and
+// Swift calls this function via evaluateJavaScript on every content update
+// (MarkdownWebView / MarkdownWebViewState) instead of reloading the page —
+// reloading would re-parse every stylesheet and re-parse/recompile all of
+// highlight.js on every single update.
+window.FoliumRenderBody = function (html) {
+  var article = document.getElementById("markdown-content");
+  article.innerHTML = html;
+
   if (window.hljs) {
     window.hljs.highlightAll();
   }
 
-  document.querySelectorAll(".copy-button").forEach(function (button) {
+  article.querySelectorAll(".copy-button").forEach(function (button) {
     button.addEventListener("click", function () {
       var block = button.closest(".code-block");
       var code = block ? block.querySelector("code") : null;
@@ -27,4 +36,4 @@
       }, 2000);
     });
   });
-})();
+};

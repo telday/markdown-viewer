@@ -13,8 +13,9 @@ at runtime (see `docs/agents/definition-of-done.md` and issue #4).
   bundle and the `github`/`github-dark` themes from `@highlightjs/cdn-assets`
   into `Sources/Folium/Vendor/HighlightJS/` at build time, unmodified. That
   directory is gitignored — the actual bytes live only in the npm registry
-  and each build's output, not in this repo; `Sources/Folium/HighlightJS.swift`
-  / `HighlightJSTheme.swift` read them via `VendoredAsset` + SPM resources.
+  and each build's output, not in this repo. `Sources/Folium/Resources/page.html`
+  references the copied files directly by URL (`<script src>`/`<link href>`);
+  no Swift code reads their contents.
 - **License**: BSD 3-Clause
 
 ```

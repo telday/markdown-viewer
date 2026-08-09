@@ -36,3 +36,15 @@ instead of hand-rolling one).
   WYSIWYG editing is wanted later, revisit this ADR.
 - Vim-style scroll keys are implemented via JS (`window.scrollBy` /
   `scroll-behavior: smooth`) rather than native `NSScrollView` handling.
+- Loading is `loadFileURL(_:allowingReadAccessTo:)`, not the more obvious
+  `loadHTMLString(_:baseURL:)`: WebKit gives every `file://` resource its own
+  origin, and a plain `baseURL` only resolves relative URLs — it doesn't
+  grant read access to what they point at, so CSS/JS referenced from a
+  `loadHTMLString`-loaded page silently fail to apply (confirmed by testing:
+  `SecurityError: Not allowed to access cross-origin stylesheet`). Only
+  `loadFileURL` actually grants that access, but it requires the loaded
+  document itself to be a real file within the granted directory — so
+  `MarkdownWebView` loads one static shell (`Resources/page.html`) per
+  `WKWebView` and pushes content updates via `evaluateJavaScript` instead of
+  reloading (see `MarkdownWebViewState` and the README). Any future
+  Mermaid/PlantUML embedding will hit this exact same constraint.

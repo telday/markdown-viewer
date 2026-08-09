@@ -38,11 +38,29 @@ open /Applications/Folium.app
 
 ## Development
 
-### Page assets: vendored vs. first-party
+### The rendered page: a real webpage, not an inlined string
 
-The rendered page's CSS/JS is real `.css`/`.js` files under `Sources/Folium/`
-rather than baked into Swift string literals — two kinds, handled
-differently:
+`MarkdownWebView` loads a static shell (`Sources/Folium/Resources/page.html`)
+once per `WKWebView` via `loadFileURL(_:allowingReadAccessTo:)`, and the
+shell references its CSS/JS with ordinary `<link>`/`<script src>` URLs —
+the way any webpage loads its assets — rather than inlining their content
+into a Swift string. Every Markdown file open/change after that first load
+is a `window.FoliumRenderBody(...)` call via `evaluateJavaScript`
+(`MarkdownPage.renderBodyScript`, driven by `MarkdownWebViewState`), not a
+page reload: a reload would re-parse every stylesheet and re-parse/recompile
+all of highlight.js on every single change, which matters once live
+source-preview editing (planned, see ADR 0001) means that happens on every
+keystroke.
+
+`loadHTMLString(_:baseURL:)` — the more obvious-looking API — does **not**
+work for this: WebKit gives every `file://` resource its own origin, and a
+plain `baseURL` only resolves relative URLs, it doesn't grant read access to
+what they point at (confirmed by testing: referencing a sibling local CSS
+file throws `SecurityError: Not allowed to access cross-origin stylesheet`
+and the styles silently don't apply). `loadFileURL` is the API that actually
+grants that access.
+
+Two kinds of asset, handled differently:
 
 - **Third-party, vendored**: highlight.js (see
   [`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md)), so there's no CDN
@@ -53,21 +71,30 @@ differently:
   [`vendor/package.json`](vendor/package.json) (a real npm manifest Dependabot
   tracks for version bumps and security advisories). Requires `npm` (e.g.
   `brew install node`), but only hits the network on the first run or after a
-  version bump; otherwise it's a no-op. Read at runtime via `VendoredAsset` +
-  a `.copy` SPM resource: `highlight.min.js` is close to the resource size
-  where SPM's compile-time embedding has reported slow debug builds, so it
-  stays on the runtime-read path.
-- **First-party, authored here**: the base GitHub-matching stylesheet, the
-  code-block chrome, and the copy-button script live as ordinary committed
-  files under `Sources/Folium/Resources/` — no build step, just real CSS/JS
-  editor tooling instead of Swift string literals. Declared `.embedInCode` in
-  `Package.swift`, so SPM compiles their bytes directly into the binary as
-  `PackageResources.xxx` constants (decoded via `EmbeddedAsset`) — no runtime
-  bundle lookup, and a typo'd resource name is a compile error.
+  version bump; otherwise it's a no-op.
+- **First-party, authored here**: the shell itself, the base GitHub-matching
+  stylesheet, the code-block chrome, and the copy-button script live as
+  ordinary committed files under `Sources/Folium/Resources/` — no build
+  step, just real CSS/JS/HTML editor tooling instead of Swift string
+  literals.
+
+Both are declared as `.copy` resources in `Package.swift`, so they exist as
+real files in the app's resource bundle at runtime — nothing reads their
+contents into a Swift `String`.
 
 **A bare `swift build` / `swift test` / `swift run` (bypassing `make`) needs
 `make vendor` run at least once first**, since the vendored (not first-party)
 resource files won't exist yet.
+
+**`make bundle`/`make install` copy the SPM resource bundle into the `.app`
+*after* code-signing it**, not before: SPM's generated resource accessor
+looks for `Folium_Folium.bundle` as a sibling of the `.app` itself, but
+`codesign` refuses to seal a bundle with anything outside `Contents/` at its
+root. Signing first and adding the resource bundle after still produces a
+working app (verified by hiding every other fallback path and confirming it
+still launches and finds its resources) — `codesign --verify` will flag the
+added directory as unsealed, which only matters if this project ever moves
+beyond ad-hoc signing (see ADR 0003).
 
 ### Quality gates
 

@@ -72,6 +72,20 @@ bundle: build
 	cp packaging/Info.plist "$(CONTENTS)/Info.plist"
 	printf 'APPL????' > "$(CONTENTS)/PkgInfo"
 	codesign --force --sign - --identifier "$(BUNDLE_ID)" "$(APP_BUNDLE)"
+	# SPM's generated Bundle.module accessor looks for the resource bundle as
+	# a sibling of the .app itself (Bundle.main.bundleURL), not inside
+	# Contents/Resources — its other fallback is a dev-machine-only absolute
+	# .build path, so skipping this silently produces an app that only
+	# happens to work on the machine it was built on and fatalErrors/crashes
+	# on launch anywhere else. Copied in *after* signing: codesign refuses to
+	# seal a bundle with anything outside Contents/ at its root ("unsealed
+	# contents present in the bundle root"), confirmed by testing both
+	# orders. Signing first and adding this after still launches correctly
+	# (verified by hiding the fallback .build path entirely and confirming
+	# the app still finds its resources); `codesign --verify` will flag the
+	# added directory as unsealed, which only matters if this ever moves
+	# beyond ad-hoc signing (see ADR 0003).
+	cp -R "$(BUILD_DIR)/$(APP_NAME)_$(APP_NAME).bundle" "$(APP_BUNDLE)/$(APP_NAME)_$(APP_NAME).bundle"
 	@echo "Built $(APP_BUNDLE)"
 
 ## Install the bundle to /Applications.
