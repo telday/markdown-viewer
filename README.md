@@ -48,9 +48,10 @@ into a Swift string. Every Markdown file open/change after that first load
 is a `window.FoliumRenderBody(...)` call via `evaluateJavaScript`
 (`MarkdownPage.renderBodyScript`, driven by `MarkdownWebViewState`), not a
 page reload: a reload would re-parse every stylesheet and re-parse/recompile
-all of highlight.js on every single change, which matters once live
-source-preview editing (planned, see ADR 0001) means that happens on every
-keystroke.
+all of highlight.js on every single change, which matters because live reload
+(see [issue #7](https://github.com/telday/markdown-viewer/issues/7)) makes that
+happen on every save while the user edits in another app — against a 100 ms
+repaint budget (see [`CONTEXT.md`](CONTEXT.md)).
 
 `loadHTMLString(_:baseURL:)` — the more obvious-looking API — does **not**
 work for this: WebKit gives every `file://` resource its own origin, and a

@@ -52,6 +52,27 @@ Adding a file to the exclusion list is a deliberate change to
 `scripts/coverage.sh` — do it only for genuinely unreachable host glue, and call
 it out in the PR.
 
+### Exclusion obliges integration coverage
+
+**"Excluded from unit coverage" must never come to mean "untested."** Any file
+on the exclusion list must have its behavior asserted in
+`FoliumIntegrationTests`, using the tier-2 computed-style / real-engine pattern
+in [testing.md](testing.md).
+
+This matters more as the app grows. `CONTEXT.md`'s priority 1 (native Mac
+citizen) commits the project to a steady stream of AppKit↔WebKit bridging —
+Find, print, Services, navigation policy, VoiceOver, state restoration — all of
+which lands in excluded glue. Without this rule, `make coverage` keeps
+reporting a green 97% over a shrinking fraction of the codebase while the
+riskiest seam in the app is measured by nothing.
+
+Concretely: the navigation-policy handler needs an integration test proving an
+external link does not navigate the web view, and the Content-Security-Policy
+needs one proving a remote image fails to load.
+
+`make coverage` also reports the excluded files' line count and share of the
+codebase on every run, so this erosion stays visible rather than silent.
+
 ## Rules
 
 - **All gates must pass.** A change is not done while any gate is red. Do not

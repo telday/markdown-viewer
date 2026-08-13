@@ -1,3 +1,15 @@
+## What this project optimizes for
+
+Read [`CONTEXT.md`](CONTEXT.md) before making changes. It records the product's
+floors and its ordered priorities, so decisions an issue doesn't cover can
+still be made the way the project would make them.
+
+The short version — **floors** (never traded): the document says what the file
+says; no network, ever; the gates pass. **Priorities** (higher wins collisions):
+1. native Mac citizen → 2. perceived latency → 3. GitHub fidelity inside the
+document → 4. scope restraint. Or, in one line: *the app grows toward
+completeness on OS integration, and stays flat on invented features.*
+
 ## Definition of Done
 
 Every code change must pass all quality gates before the work is done: lint,
