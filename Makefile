@@ -70,6 +70,13 @@ bundle: build
 	mkdir -p "$(CONTENTS)/MacOS" "$(CONTENTS)/Resources"
 	cp "$(BUILD_DIR)/$(APP_NAME)" "$(CONTENTS)/MacOS/$(APP_NAME)"
 	cp packaging/Info.plist "$(CONTENTS)/Info.plist"
+	# The Finder/Dock icon. `.icns` is a multi-resolution container, and
+	# iconutil is the only supported way to produce one — it packs the ten
+	# PNGs whose names encode the sizes macOS asks for (16pt through 512pt,
+	# each @1x and @2x). Built here rather than committed so the PNGs stay
+	# the reviewable source of truth.
+	iconutil --convert icns --output "$(CONTENTS)/Resources/$(APP_NAME).icns" \
+		packaging/$(APP_NAME).iconset
 	printf 'APPL????' > "$(CONTENTS)/PkgInfo"
 	codesign --force --sign - --identifier "$(BUNDLE_ID)" "$(APP_BUNDLE)"
 	# SPM's generated Bundle.module accessor looks for the resource bundle as

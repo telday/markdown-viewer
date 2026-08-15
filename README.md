@@ -19,7 +19,7 @@ make install
 ```
 
 This builds a release binary (`swift build -c release`), assembles a
-`Folium.app` bundle with its `Info.plist`, ad-hoc signs it so it launches
+`Folium.app` bundle with its `Info.plist` and app icon, ad-hoc signs it so it launches
 without Gatekeeper complaints on the machine that built it, and copies it to
 `/Applications`.
 
@@ -96,6 +96,12 @@ working app (verified by hiding every other fallback path and confirming it
 still launches and finds its resources) — `codesign --verify` will flag the
 added directory as unsealed, which only matters if this project ever moves
 beyond ad-hoc signing (see ADR 0003).
+
+**The app icon is committed as PNGs, not as an `.icns`.** `packaging/Folium.iconset/`
+holds the ten sizes macOS asks for and `packaging/Folium.svg` is the vector
+master; `make bundle` runs `iconutil` to pack them into
+`Contents/Resources/Folium.icns`. To change the icon, re-export the PNGs from
+the SVG — the `.icns` is a build artifact and reviewing a binary blob is not.
 
 ### Quality gates
 

@@ -10,6 +10,10 @@
     <string>Folium</string>
     <key>CFBundleDisplayName</key>
     <string>Folium</string>
+    <!-- Resources/Folium.icns, extension omitted by convention. Built from
+         packaging/Folium.iconset by the Makefile's `bundle` target. -->
+    <key>CFBundleIconFile</key>
+    <string>Folium</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
