@@ -16,6 +16,8 @@ EXCLUDED_FILES=(
   "Sources/Folium/FoliumApp.swift"        # @main App/Scene — only runs when the app launches
   "Sources/Folium/MarkdownWebView.swift"  # NSViewRepresentable over WKWebView — needs a live app
   "Sources/Folium/MarkdownDocument.swift" # FileDocument conformance — only the SwiftUI doc framework constructs it
+  "Sources/Folium/DocumentWindowTabber.swift" # NSViewRepresentable + NSWindow tab-group calls — needs live windows
+  "Sources/Folium/FoliumAppDelegate.swift" # NSApplicationDelegate — only AppKit calls it, at launch
 )
 
 # Build an llvm-cov --ignore-filename-regex from the excluded list plus build/test dirs.

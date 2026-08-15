@@ -37,6 +37,10 @@ run** so it's always visible. Currently excluded:
 - `Sources/Folium/MarkdownWebView.swift` — `NSViewRepresentable` over `WKWebView`.
 - `Sources/Folium/MarkdownDocument.swift` — `FileDocument` conformance; only the
   SwiftUI document machinery constructs its `ReadConfiguration`.
+- `Sources/Folium/DocumentWindowTabber.swift` — `NSViewRepresentable` plus
+  `NSWindow` tab-group calls; needs live windows.
+- `Sources/Folium/FoliumAppDelegate.swift` — `NSApplicationDelegate`; only AppKit
+  calls it, at launch.
 
 ### Keep logic in unit-testable units
 
