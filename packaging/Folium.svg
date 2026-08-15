@@ -1,0 +1,28 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<linearGradient id="bgA" x1="0" y1="0" x2="1" y2="1">
+<stop offset="0" stop-color="#5fa15c"/>
+<stop offset="1" stop-color="#245430"/>
+</linearGradient>
+<linearGradient id="fR1" x1="0" y1="0" x2="1" y2="0.3"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#dcebda"/></linearGradient>
+<linearGradient id="fL1" x1="1" y1="0" x2="0" y2="0.3"><stop offset="0" stop-color="#f2f8f0"/><stop offset="1" stop-color="#cfe2cb"/></linearGradient>
+<linearGradient id="fR2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#dcebda"/><stop offset="1" stop-color="#c0d8bb"/></linearGradient>
+<linearGradient id="fL2" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#cfe2cb"/><stop offset="1" stop-color="#aecda6"/></linearGradient>
+<linearGradient id="fR3" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#c0d8bb"/><stop offset="1" stop-color="#9dc294"/></linearGradient>
+<linearGradient id="fL3" x1="1" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#aecda6"/><stop offset="1" stop-color="#8bb681"/></linearGradient>
+</defs>
+<rect x="0" y="0" width="512" height="512" rx="112" fill="url(#bgA)"/>
+<g>
+<polygon points="256,120 340,220 256,396 256,120" fill="url(#fR1)"/>
+<polygon points="256,120 172,220 256,396 256,120" fill="url(#fL1)"/>
+<polygon points="256,220 340,220 300,300 256,300" fill="url(#fR2)"/>
+<polygon points="256,220 172,220 212,300 256,300" fill="url(#fL2)"/>
+<polygon points="256,300 300,300 272,360 256,360" fill="url(#fR3)"/>
+<polygon points="256,300 212,300 240,360 256,360" fill="url(#fL3)"/>
+<line x1="256" y1="120" x2="256" y2="396" stroke="#5c8a56" stroke-width="3"/>
+<line x1="256" y1="220" x2="340" y2="220" stroke="#7fa878" stroke-width="1.5"/>
+<line x1="256" y1="220" x2="172" y2="220" stroke="#7fa878" stroke-width="1.5"/>
+<line x1="256" y1="300" x2="300" y2="300" stroke="#7fa878" stroke-width="1.5"/>
+<line x1="256" y1="300" x2="212" y2="300" stroke="#7fa878" stroke-width="1.5"/>
+</g>
+</svg>
