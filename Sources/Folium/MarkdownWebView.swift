@@ -13,19 +13,24 @@ import WebKit
 /// why reloading on every change would be prohibitively expensive.
 struct MarkdownWebView: NSViewRepresentable {
     let bodyHTML: String
+    let scrollKeys: ScrollKeyBindings
 
     func makeCoordinator() -> Coordinator {
         Coordinator()
     }
 
-    func makeNSView(context: Context) -> WKWebView {
-        let webView = WKWebView()
+    func makeNSView(context: Context) -> ScrollKeyWebView {
+        let webView = ScrollKeyWebView()
+        webView.scrollKeys = scrollKeys
         webView.navigationDelegate = context.coordinator
         webView.loadFileURL(MarkdownPage.pageURL, allowingReadAccessTo: MarkdownPage.resourceBaseURL)
         return webView
     }
 
-    func updateNSView(_ webView: WKWebView, context: Context) {
+    func updateNSView(_ webView: ScrollKeyWebView, context: Context) {
+        // Rebinding a key in Preferences has to reach the documents already
+        // open, not just the next one.
+        webView.scrollKeys = scrollKeys
         if let ready = context.coordinator.state.render(bodyHTML: bodyHTML) {
             webView.evaluateJavaScript(MarkdownPage.renderBodyScript(bodyHTML: ready))
         }
@@ -41,5 +46,42 @@ struct MarkdownWebView: NSViewRepresentable {
             guard let queued = state.shellDidFinishLoading() else { return }
             webView.evaluateJavaScript(MarkdownPage.renderBodyScript(bodyHTML: queued))
         }
+    }
+}
+
+/// A `WKWebView` that scrolls itself when one of the configured scroll keys is
+/// pressed (issue #6).
+///
+/// The capture is here, in the responder chain, rather than in a `keydown`
+/// listener inside the page. A listener would only fire while the web content
+/// held focus, and it would swallow the keystroke before AppKit could offer it
+/// to menu key equivalents, the Services menu or VoiceOver — the sort of thing
+/// `CONTEXT.md` priority 1 exists to prevent. A key that isn't bound goes to
+/// `super`, so everything WebKit already does with the keyboard (arrows, Page
+/// Up/Down, Home/End, ⌘F's find bar) is untouched.
+///
+/// The decision of *whether* a keystroke scrolls lives in `ScrollKeyBindings`;
+/// what's left here is `NSEvent` translation and the `evaluateJavaScript` call.
+final class ScrollKeyWebView: WKWebView {
+    var scrollKeys: ScrollKeyBindings = .standard
+
+    override func keyDown(with event: NSEvent) {
+        guard let direction = scrollKeys.direction(for: ScrollKeyPress(event)) else {
+            super.keyDown(with: event)
+            return
+        }
+        evaluateJavaScript(MarkdownPage.scrollScript(direction))
+    }
+}
+
+extension ScrollKeyPress {
+    /// `charactersIgnoringModifiers`, so an ⌥-modified key still reports the
+    /// letter printed on it rather than the symbol it would type.
+    init(_ event: NSEvent) {
+        let modifiers = event.modifierFlags.intersection([.command, .control, .option])
+        self.init(
+            characters: event.charactersIgnoringModifiers ?? "",
+            carriesModifier: !modifiers.isEmpty
+        )
     }
 }

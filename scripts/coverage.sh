@@ -18,6 +18,7 @@ EXCLUDED_FILES=(
   "Sources/Folium/MarkdownDocument.swift" # FileDocument conformance — only the SwiftUI doc framework constructs it
   "Sources/Folium/DocumentWindowTabber.swift" # NSViewRepresentable + NSWindow tab-group calls — needs live windows
   "Sources/Folium/FoliumAppDelegate.swift" # NSApplicationDelegate — only AppKit calls it, at launch
+  "Sources/Folium/PreferencesView.swift"  # SwiftUI Settings content + an NSButton subclass — needs a live window
 )
 
 # Build an llvm-cov --ignore-filename-regex from the excluded list plus build/test dirs.

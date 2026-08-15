@@ -55,4 +55,21 @@ enum MarkdownPage {
         guard let jsString = String(data: json, encoding: .utf8) else { fatalError(failure) }
         return "window.FoliumRenderBody(\(jsString))"
     }
+
+    /// How far one press of a scroll key moves the document, in lines of body
+    /// text. `Resources/scroll.js` turns lines into pixels against the
+    /// document's own line height, so the step keeps its meaning as the user
+    /// zooms the text (⌘+/⌘−).
+    ///
+    /// Three rather than vim's one: `j` in vim moves a cursor that the reader
+    /// is watching, while here there is nothing to follow, and a one-line step
+    /// makes a long document feel stuck.
+    static let scrollLinesPerPress = 3
+
+    /// Builds the `evaluateJavaScript` call that scrolls the document one key
+    /// press, via `window.FoliumScrollBy` — defined by `Resources/scroll.js`.
+    static func scrollScript(_ direction: ScrollDirection) -> String {
+        let lines = direction == .downward ? scrollLinesPerPress : -scrollLinesPerPress
+        return "window.FoliumScrollBy(\(lines))"
+    }
 }
