@@ -10,3 +10,4 @@ DerivedData/
 # lockfile diff instead of a multi-thousand-line vendored-source diff.
 Sources/Folium/Vendor/
 vendor/node_modules/
+.claude/worktrees

@@ -37,11 +37,23 @@ echo "==> Covered logic (UI/host-glue files below are excluded):"
 xcrun llvm-cov report "$XCTEST" -instr-profile="$PROF" \
   --ignore-filename-regex="$IGNORE_REGEX" Sources
 
+# Report how much of the codebase the exclusion list covers, not just which
+# files are on it. Priority 1 in CONTEXT.md (native Mac citizen) means glue
+# grows steadily; without this number, coverage can read a green 97% over a
+# shrinking fraction of the app while nobody notices.
 echo
 echo "==> Excluded from the ${THRESHOLD}% coverage requirement:"
+EXCLUDED_LINES=0
 for f in "${EXCLUDED_FILES[@]}"; do
-  echo "      - $f"
+  lines=$(wc -l < "$f" | tr -d ' ')
+  EXCLUDED_LINES=$((EXCLUDED_LINES + lines))
+  printf '      - %-44s %4s lines\n' "$f" "$lines"
 done
+TOTAL_LINES=$(find Sources -name '*.swift' -exec cat {} + | wc -l | tr -d ' ')
+printf '    %s of %s Swift lines in Sources (%.1f%%) are excluded — each one owes\n' \
+  "$EXCLUDED_LINES" "$TOTAL_LINES" \
+  "$(python3 -c "print(100 * $EXCLUDED_LINES / $TOTAL_LINES)")"
+echo "    integration coverage (see docs/agents/definition-of-done.md)."
 
 PERCENT=$(xcrun llvm-cov export "$XCTEST" -instr-profile="$PROF" --summary-only \
   --ignore-filename-regex="$IGNORE_REGEX" Sources \

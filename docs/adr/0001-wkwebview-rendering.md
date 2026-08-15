@@ -4,6 +4,11 @@ status: accepted
 
 # Render Markdown via WKWebView, not native AppKit/SwiftUI
 
+> **Amended 2026-08-13 — see [Amendments](#amendments) below.** Two of the
+> future features cited as justification here have since changed: editing is
+> now a permanent non-goal, and PlantUML is dropped. The decision stands; parts
+> of its reasoning no longer do.
+
 The core renderer displays Markdown as HTML/CSS/JS inside a `WKWebView`, rather than
 building a native view tree (`NSAttributedString` / hand-built SwiftUI views) from a
 parsed Markdown AST.
@@ -48,3 +53,40 @@ instead of hand-rolling one).
   `WKWebView` and pushes content updates via `evaluateJavaScript` instead of
   reloading (see `MarkdownWebViewState` and the README). Any future
   Mermaid/PlantUML embedding will hit this exact same constraint.
+
+## Amendments
+
+### 2026-08-13 — editing is a permanent non-goal
+
+The "planned future rudimentary editing" consequence above is **superseded**.
+Folium is a viewer, permanently; see [`CONTEXT.md`](../../CONTEXT.md). Live
+reload beside the user's real editor is the workflow instead.
+
+This does not change the decision. It does change one stated reason: the
+argument for pushing content via `evaluateJavaScript` rather than reloading the
+shell was partly that editing would re-render on every keystroke. Live reload
+alone still justifies it — a reload would re-parse every stylesheet and
+re-parse/recompile all of highlight.js on every file change.
+
+Reopening editing requires a new ADR, which would also have to revisit this
+one: source-with-live-preview was the shape that made WKWebView tolerable for
+editing, and in-place WYSIWYG remains a genuine liability here.
+
+### 2026-08-13 — PlantUML dropped; Mermaid lazy-loaded
+
+The claim above that Mermaid and PlantUML are alike "JS libraries that render
+to SVG in a DOM — trivial to embed in a web view" is **wrong about PlantUML**.
+PlantUML is a Java program. Rendering it requires a remote server (which would
+violate the no-network floor, and would ship the user's private diagrams to a
+third party), a bundled JVM, or a user-installed binary. It is now a stated
+non-goal.
+
+Mermaid remains planned, but **lazy-loaded**: it is fetched from the bundle and
+parsed only for documents that actually contain a `mermaid` fence, so
+diagram-free documents pay nothing. Its full distribution is roughly an order
+of magnitude larger than the 127 KB highlight.js bundle, which the latency
+priority will not absorb unconditionally.
+
+The decision to use WKWebView stands, but with diagrams reduced to Mermaid
+alone, its strongest remaining justification is GitHub-quality code-block
+rendering and the ability to reuse existing JS highlighters.

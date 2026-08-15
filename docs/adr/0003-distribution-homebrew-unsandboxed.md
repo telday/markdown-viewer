@@ -30,3 +30,26 @@ App Sandbox.
   cleanly under Gatekeeper once it's downloaded rather than built locally
   from source (locally-built binaries aren't quarantined, so this isn't
   blocking the v1 `make install` path).
+
+## Amendments
+
+### 2026-08-13 — "relative links/images work simply and directly" is not yet true
+
+The rejected-options section argues that sandboxing would require "care around
+how a `WKWebView` loads local resources (relative image/link paths from a
+Markdown file)". Being unsandboxed is necessary for that to work, but it is not
+sufficient, and it does not work today: `MarkdownWebView` calls
+`loadFileURL(_:allowingReadAccessTo:)` with `MarkdownPage.resourceBaseURL` —
+the app's own resource bundle — so a page has no read access to the opened
+document's directory. `![](./screenshot.png)` next to the document renders as a
+broken image.
+
+Fixing it means widening the read-access grant to the document's directory,
+which also widens what any script injected via a malicious document could
+reach. That interacts directly with the no-network floor and the
+Content-Security-Policy work in [`CONTEXT.md`](../../CONTEXT.md): CSP has to be
+in force before the grant is widened. Tracked as its own issue.
+
+This does not change the decision — unsandboxed remains the right call, and
+sandboxing would make the fix strictly harder (security-scoped bookmarks per
+document).
