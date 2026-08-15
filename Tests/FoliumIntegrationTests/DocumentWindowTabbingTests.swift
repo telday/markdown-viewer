@@ -114,20 +114,3 @@ struct DocumentWindowTabbingTests {
         for window in windows { window.close() }
     }
 }
-
-/// Brings up the `NSApplication` that AppKit's window tab-group machinery
-/// assumes exists. `swift test` runs as a plain command-line process, and
-/// without this `addTabbedWindow(_:ordered:)` takes the whole test bundle down
-/// with a segfault rather than failing an assertion.
-@MainActor
-private enum AppKitHost {
-    private static var isStarted = false
-
-    static func startIfNeeded() {
-        guard !isStarted else { return }
-        isStarted = true
-        // `.accessory` keeps the suite from stealing focus and putting a Dock
-        // icon up on whoever is running it.
-        NSApplication.shared.setActivationPolicy(.accessory)
-    }
-}

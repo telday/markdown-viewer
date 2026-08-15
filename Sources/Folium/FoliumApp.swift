@@ -6,13 +6,28 @@ struct FoliumApp: App {
     // delegate leaves off. See FoliumAppDelegate.
     @NSApplicationDelegateAdaptor(FoliumAppDelegate.self) private var appDelegate
 
+    // One store for the whole app: rebinding a key in the Settings scene has
+    // to reach every document window, which is a separate scene.
+    @StateObject private var scrollKeys = ScrollKeyStore()
+
     var body: some Scene {
         DocumentGroup(viewing: MarkdownDocument.self) { configuration in
-            DocumentView(text: configuration.document.text, fileURL: configuration.fileURL)
-                // Files this document's window into the app's shared native
-                // tab group — the only way to reach the NSWindow that
-                // DocumentGroup made for it. See DocumentWindowTabber.
-                .background(DocumentWindowTabber())
+            DocumentView(
+                text: configuration.document.text,
+                fileURL: configuration.fileURL,
+                scrollKeys: scrollKeys
+            )
+            // Files this document's window into the app's shared native
+            // tab group — the only way to reach the NSWindow that
+            // DocumentGroup made for it. See DocumentWindowTabber.
+            .background(DocumentWindowTabber())
+        }
+
+        // The Settings scene is what puts "Settings…" in the app menu at ⌘,
+        // and manages the window behind it. Opening a preferences window
+        // ourselves would be the lookalike CONTEXT.md priority 1 rules out.
+        Settings {
+            PreferencesView(scrollKeys: scrollKeys)
         }
     }
 }
@@ -29,12 +44,14 @@ struct FoliumApp: App {
 /// `scripts/coverage.sh` for something with nothing in it to test.
 private struct DocumentView: View {
     @StateObject private var document: LiveDocument
+    @ObservedObject var scrollKeys: ScrollKeyStore
 
-    init(text: String, fileURL: URL?) {
+    init(text: String, fileURL: URL?, scrollKeys: ScrollKeyStore) {
         _document = StateObject(wrappedValue: LiveDocument(text: text, fileURL: fileURL))
+        self.scrollKeys = scrollKeys
     }
 
     var body: some View {
-        MarkdownWebView(bodyHTML: document.bodyHTML)
+        MarkdownWebView(bodyHTML: document.bodyHTML, scrollKeys: scrollKeys.bindings)
     }
 }
