@@ -33,3 +33,20 @@ restoration, largely for free on macOS.
   going forward — any future feature (e.g. a sidebar showing multiple files
   in one window) would need to work within or deliberately break that
   assumption.
+- **"Largely for free" was optimistic**, as building it out under issue #5
+  showed. File > Open, Recent Documents, and *not* opening a second window for
+  an already-open file are genuinely free. Two things are not:
+  - **Tabbing.** `DocumentGroup` windows default to the system-wide "Prefer
+    tabs when opening documents" setting, whose default is *In Full Screen
+    Only* — so out of the box, opening three files gives three loose windows.
+    Folium sets `tabbingMode`/`tabbingIdentifier` on each document window and
+    calls `addTabbedWindow(_:ordered:)` itself. That is still AppKit's real tab
+    group (drag-to-reorder, drag-out, ⌘W, Mission Control all come with it), so
+    the "no custom tab strip" decision stands — it just has to be asked for.
+  - **State restoration.** SwiftUI's built-in app delegate does not opt into
+    secure restorable state, and AppKit persists nothing for an app that
+    hasn't, so nothing reopened after a quit. Folium supplies its own
+    `NSApplicationDelegate` for that.
+
+  Both failures are silent — the app looks fine and simply doesn't do the
+  thing — which is why they have integration tests rather than a manual note.
