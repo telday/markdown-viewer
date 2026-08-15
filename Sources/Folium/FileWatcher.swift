@@ -2,20 +2,14 @@ import Foundation
 
 /// Watches one file for changes made outside Folium (issue #7).
 ///
-/// The watch is a `DispatchSource` file-system source over an `O_EVTONLY`
-/// descriptor — the kernel tells us when the file changes, so nothing polls and
-/// an idle window costs nothing. `LiveReload` owns the decisions; this type is
-/// the descriptor bookkeeping that carries them out, in particular the re-open
-/// dance an atomic save forces (see ``LiveReload/reaction(to:)``).
+/// The kernel pushes notifications to us (via a Dispatch file-system source on
+/// an open descriptor), so nothing polls and an idle document costs nothing.
+/// `LiveReload` decides what each notification means; this type keeps the
+/// descriptor pointed at the right file, which an atomic save makes harder than
+/// it sounds — see ``LiveReload/reaction(to:)``.
 ///
-/// Everything here is Dispatch and POSIX, with no SwiftUI/AppKit/WebKit
-/// dependency, so it stays in the unit-tested logic layer rather than joining
-/// the coverage-excluded glue: the failure mode this guards against — the
-/// watch surviving exactly one save and then going quiet forever — is precisely
-/// the kind that an untested file would ship with.
-///
-/// `@unchecked Sendable`: the mutable state is the current source and the
-/// cancelled flag, both guarded by `lock`, which the compiler can't verify.
+/// `@unchecked Sendable`: `lock` guards the mutable state, which the compiler
+/// can't verify.
 final class FileWatcher: @unchecked Sendable {
     private let url: URL
     private let queue: DispatchQueue
@@ -29,12 +23,11 @@ final class FileWatcher: @unchecked Sendable {
 
     /// - Parameters:
     ///   - url: the file to watch.
-    ///   - queue: the queue notifications are delivered on. Deliberately not
-    ///     the main queue: callers hop to whatever isolation they need, and a
-    ///     private queue keeps a burst of file-system events off the main
-    ///     thread, which is busy painting the document.
-    ///   - onChange: called once per notification that means the file's bytes
-    ///     changed. Callers are expected to coalesce — see `ReloadCoalescer`.
+    ///   - queue: where notifications are delivered. Not the main queue: it is
+    ///     busy painting the document, and callers can hop from here if they
+    ///     need to.
+    ///   - onChange: called once per notification. Bursty by nature; callers
+    ///     are expected to coalesce (see `ReloadCoalescer`).
     init(
         url: URL,
         queue: DispatchQueue = FileWatcher.makeQueue(),
@@ -59,11 +52,9 @@ final class FileWatcher: @unchecked Sendable {
 
     /// Begins watching.
     ///
-    /// - Returns: `false` if the file could not be opened — a path that has
-    ///   gone away, or one Folium has no permission to read. Live-reload is an
-    ///   enhancement to a document that is already on screen, so a caller's
-    ///   reasonable response is to carry on without it rather than to fail the
-    ///   open.
+    /// - Returns: `false` if the file could not be opened (gone, or
+    ///   unreadable). The document is already on screen by this point, so the
+    ///   sensible response is to carry on without live-reload.
     @discardableResult
     func start() -> Bool {
         arm()
@@ -94,10 +85,9 @@ final class FileWatcher: @unchecked Sendable {
         source.setEventHandler { [weak self] in
             self?.handle(LiveReload.Change(source.data))
         }
-        // The descriptor's lifetime is the source's, so it is closed here and
-        // nowhere else: a re-arm cancels the old source, and only once that
-        // cancellation has drained its in-flight events does the old
-        // descriptor go away.
+        // Closed here and nowhere else. Cancelling a source runs this only
+        // after its in-flight events have drained, so re-arming can't pull the
+        // descriptor out from under a handler that is still running.
         source.setCancelHandler { close(descriptor) }
 
         var previous: (any DispatchSourceFileSystemObject)?
@@ -107,10 +97,9 @@ final class FileWatcher: @unchecked Sendable {
             self.source = source
             return true
         }
-        // libdispatch traps on the release of a source that was never resumed,
-        // so an unwanted source still has to be started; resuming one that is
-        // already cancelled just runs the cancel handler that closes the
-        // descriptor.
+        // Dispatch crashes if a source is released without ever being
+        // resumed, so even an unwanted one has to be started. Resuming an
+        // already-cancelled source just runs the cancel handler.
         guard accepted else { source.cancel(); source.resume(); return false }
 
         previous?.cancel()
@@ -120,19 +109,17 @@ final class FileWatcher: @unchecked Sendable {
 
     private func handle(_ change: LiveReload.Change) {
         let reaction = LiveReload.reaction(to: change)
-        // Re-open first: the reload that follows reads the path, and by then
-        // the watch should already be pointed at whatever the path now names.
+        // Re-open first, so the watch is pointed at the current file before
+        // the reload reads it.
         if reaction.reopens { reopen(attemptsRemaining: reopenAttempts) }
         if reaction.reloads { onChange() }
     }
 
-    /// Re-establishes the watch against the path after the descriptor stopped
-    /// referring to it, retrying while an editor's save is mid-flight.
+    /// Re-points the watch at the path, retrying while a save is mid-flight.
     ///
-    /// Running out of attempts cancels the watch outright rather than leaving
-    /// it armed: the descriptor it still holds refers to an unlinked inode
-    /// nothing will ever write to again, so keeping it open buys nothing and
-    /// costs a file descriptor for the life of the window.
+    /// Running out of attempts cancels the watch: the descriptor it holds
+    /// refers to a file nothing will ever write to again, so keeping it open
+    /// costs a descriptor for the life of the window and buys nothing.
     private func reopen(attemptsRemaining: Int) {
         guard !isCancelledNow else { return }
         if arm() { return }
@@ -146,9 +133,8 @@ final class FileWatcher: @unchecked Sendable {
         lock.withLock { isCancelled }
     }
 
-    /// Dispatch predates `Duration` and `asyncAfter` still speaks
-    /// `DispatchTimeInterval`, so the policy's value is converted here rather
-    /// than stated twice in two vocabularies.
+    /// Dispatch predates `Duration`, so the policy's value is converted here
+    /// rather than stated twice in two units.
     private var reopenRetryInterval: DispatchTimeInterval {
         let (seconds, attoseconds) = reopenRetryDelay.components
         return .nanoseconds(Int(seconds * 1_000_000_000 + attoseconds / 1_000_000_000))
@@ -156,9 +142,8 @@ final class FileWatcher: @unchecked Sendable {
 }
 
 extension LiveReload.Change {
-    /// Mirrors Dispatch's event flags into the logic layer's Dispatch-free
-    /// vocabulary, the same way `DocumentTabbing.UserPreference` mirrors
-    /// AppKit's tabbing preference.
+    /// Mirrors Dispatch's flags into `LiveReload`'s own vocabulary, the same
+    /// way `DocumentTabbing.UserPreference` mirrors AppKit's tabbing setting.
     init(_ event: DispatchSource.FileSystemEvent) {
         var change: LiveReload.Change = []
         if event.contains(.write) { change.insert(.written) }

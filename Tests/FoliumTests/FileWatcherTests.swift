@@ -2,13 +2,11 @@ import Foundation
 import Testing
 @testable import Folium
 
-/// The kernel-level half of live-reload (issue #7), against real files.
+/// The file-watching half of live-reload (issue #7), against real files.
 ///
-/// These are unit tests rather than integration tests because `FileWatcher` has
-/// no SwiftUI/AppKit/WebKit dependency and so is not on the coverage exclusion
-/// list — and because the failure this guards against is quiet by nature: a
-/// watch that survives exactly one save and then never fires again looks
-/// identical to a file nobody edited.
+/// The failure these guard against is a quiet one: a watch that survives
+/// exactly one save and then never fires again looks exactly like a file
+/// nobody edited.
 struct FileWatcherTests {
     @Test func reportsAWriteToTheWatchedFile() async throws {
         let file = try TempFile(contents: "before")
@@ -24,9 +22,9 @@ struct FileWatcherTests {
 
     @Test func keepsWatchingAcrossAnAtomicSave() async throws {
         // How most editors save: write a temporary file, rename it over the
-        // original. The descriptor the watch holds is left pointing at an
-        // inode that is no longer the document, so without the re-open this
-        // reports the first save and nothing after it.
+        // original. The watch is left holding a file that is no longer the
+        // document, so without the re-open it reports the first save and
+        // nothing after it.
         let file = try TempFile(contents: "one")
         let changes = Counter()
         let watcher = FileWatcher(url: file.url, onChange: changes.increment)
@@ -41,8 +39,8 @@ struct FileWatcherTests {
     }
 
     @Test func recoversWhenTheFileIsRecreatedWithinTheRetryBudget() async throws {
-        // Editors that unlink before writing (and a plain `rm` followed by a
-        // fresh write) leave a gap where the path does not exist at all.
+        // Editors that delete before writing leave a gap where the path
+        // doesn't exist at all.
         let file = try TempFile(contents: "one")
         let changes = Counter()
         let watcher = FileWatcher(
@@ -90,8 +88,8 @@ struct FileWatcherTests {
         let watcher = FileWatcher(url: URL(fileURLWithPath: "/nonexistent/\(UUID().uuidString).md")) {}
         defer { watcher.cancel() }
 
-        // The caller's cue that the document is on screen without live-reload,
-        // rather than a silent no-op that looks like a watch.
+        // The caller's cue that the document is on screen without
+        // live-reload, rather than a silent no-op that looks like a watch.
         #expect(watcher.start() == false)
     }
 
@@ -126,9 +124,8 @@ struct FileWatcherTests {
     }
 
     @Test func aWatchStopsWhenItsWatcherIsReleased() async throws {
-        // A closed document window must not leave a descriptor and a dispatch
-        // source behind; deallocation is the only cancellation the app itself
-        // performs.
+        // Closing a document window must not leak a descriptor. Deallocation
+        // is the only cancellation the app itself performs.
         let file = try TempFile(contents: "one")
         let changes = Counter()
         do {
@@ -192,10 +189,9 @@ private final class Counter: @unchecked Sendable {
         lock.withLock { value += 1 }
     }
 
-    /// Waits for the count to reach `target`, polling rather than parking on a
-    /// continuation so a notification that arrives early can't be missed.
-    /// The timeout is deliberately generous: it exists to fail a broken watch,
-    /// not to measure one.
+    /// Waits for the count to reach `target`. Polls, so a notification that
+    /// arrives early can't be missed. The generous timeout is there to fail a
+    /// broken watch, not to measure a working one.
     func reach(_ target: Int, within timeout: Duration = .seconds(5)) async -> Bool {
         let deadline = ContinuousClock.now + timeout
         while ContinuousClock.now < deadline {

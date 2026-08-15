@@ -1,12 +1,12 @@
 import Testing
 @testable import Folium
 
-/// The debounce that keeps an editor's autosave from turning into a reload
-/// storm (issue #7).
+/// The debounce that keeps an autosave from turning into a reload storm
+/// (issue #7).
 ///
-/// The scheduler is injected, so these drive the window by hand rather than
-/// sleeping through it — the timing is the thing under test, and a test that
-/// slept would be both slow and only probably right.
+/// The scheduler is injected, so these close the window by hand instead of
+/// sleeping through it. Timing is what's under test, and a test that slept
+/// would be both slow and only probably right.
 @MainActor
 struct ReloadCoalescerTests {
     @Test func nothingReloadsUntilTheWindowElapses() {
@@ -48,8 +48,8 @@ struct ReloadCoalescerTests {
         let reloads = Counter()
         let coalescer = ReloadCoalescer(scheduler: scheduler, reload: reloads.increment)
 
-        // A file being written continuously. Under a debounce that restarted
-        // on every notification this would never reload at all.
+        // A file being written continuously. A debounce that restarted on
+        // every notification would never reload this at all.
         for _ in 0..<3 {
             coalescer.noteChange()
             coalescer.noteChange()
@@ -74,8 +74,8 @@ struct ReloadCoalescerTests {
 
     @Test func aChangeThatLandsDuringTheReloadIsNotSwallowed() {
         // The race a save can genuinely lose: the file is written again while
-        // the previous version is being re-read. If the window were only
-        // cleared after the reload, that write would never be picked up.
+        // the previous version is being read. If the window closed only after
+        // the reload, that write would never be picked up.
         let scheduler = ManualScheduler()
         let reloads = Counter()
         var coalescer: ReloadCoalescer?
@@ -92,8 +92,8 @@ struct ReloadCoalescerTests {
     }
 
     @Test func theRealSchedulerDefersTheWorkAndThenRunsIt() async {
-        // The one thing the manual scheduler can't show: that the production
-        // implementation actually waits, and actually fires afterwards.
+        // The one thing the manual scheduler can't show: the real one waits,
+        // and then actually fires.
         let ran = Counter()
 
         SleepingReloadScheduler().schedule(after: .milliseconds(10), run: ran.increment)

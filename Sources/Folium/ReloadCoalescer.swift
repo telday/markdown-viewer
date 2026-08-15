@@ -1,14 +1,11 @@
-/// Runs deferred work after a delay. The seam that lets `ReloadCoalescer`'s
-/// timing be driven directly by a test instead of slept through — see
-/// `docs/agents/testing.md` on keeping logic in units that can be exercised
-/// deterministically.
+/// Runs work after a delay. Injected into `ReloadCoalescer` so tests can drive
+/// the timing directly instead of sleeping through it.
 protocol ReloadScheduler: Sendable {
     @MainActor func schedule(after delay: Duration, run body: @escaping @MainActor () -> Void)
 }
 
-/// The real clock. `tolerance: .zero` because the window is half of
-/// `CONTEXT.md`'s 100 ms repaint budget and must not be allowed to drift into
-/// the other half.
+/// The real clock. `tolerance: .zero` because the window is already half of
+/// the 100 ms repaint budget and mustn't be allowed to drift into the rest.
 struct SleepingReloadScheduler: ReloadScheduler {
     @MainActor
     func schedule(after delay: Duration, run body: @escaping @MainActor () -> Void) {
@@ -22,17 +19,15 @@ struct SleepingReloadScheduler: ReloadScheduler {
 /// Collapses a burst of file-change notifications into a single reload
 /// (issue #7).
 ///
-/// A single ⌘S is several file-system events, and an editor's autosave or a
-/// running formatter produces a stream of them; re-reading and re-rendering on
-/// each one would be a reload storm.
+/// One save is several file-system events, and an autosave or a formatter
+/// produces a stream of them. Reloading on each would be a storm.
 ///
 /// The window runs from the **first** notification in a burst, not the last.
-/// Resetting it on every notification — the more familiar debounce — would let
-/// a file that is written continuously (a log tailing in, a generator emitting
-/// incrementally) starve the reload indefinitely, and would push the ordinary
-/// single-save case past the 100 ms repaint budget as soon as a save produced
-/// two events. This shape instead guarantees a reload no later than one window
-/// after the change that opened it, and no more than one reload per window.
+/// The more familiar debounce — restarting the timer on every notification —
+/// would let a continuously written file starve the reload forever, and would
+/// blow the 100 ms repaint budget as soon as a save produced two events. This
+/// way there is at most one reload per window, and never more than one window
+/// between a change and its reload.
 @MainActor
 final class ReloadCoalescer {
     private let window: Duration
@@ -57,9 +52,8 @@ final class ReloadCoalescer {
         isWaiting = true
         scheduler.schedule(after: window) { [weak self] in
             guard let self else { return }
-            // Cleared *before* reloading, so a write that lands while the file
-            // is being re-read opens a fresh window rather than being
-            // swallowed by the one that is closing.
+            // Cleared *before* reloading, so a write that lands mid-read
+            // opens a fresh window instead of being swallowed by this one.
             isWaiting = false
             reload()
         }

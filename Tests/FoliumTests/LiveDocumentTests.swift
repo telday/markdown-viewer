@@ -5,8 +5,8 @@ import Testing
 
 /// The re-read-and-re-render half of live-reload (issue #7).
 ///
-/// The coalescing window is driven by hand here so the assertions are about
-/// *what* gets rendered rather than about when a sleep finished;
+/// The coalescing window is closed by hand here, so the assertions are about
+/// *what* gets rendered rather than about when a sleep finished.
 /// `LiveReloadTests` in the integration target runs the same path on the real
 /// clock.
 @MainActor
@@ -34,9 +34,9 @@ struct LiveDocumentTests {
     }
 
     @Test func rendersTheFileRatherThanWhateverTheNotificationClaimed() throws {
-        // The floor in CONTEXT.md: the document says what the file says. The
+        // CONTEXT.md's floor: the document says what the file says. The
         // notification carries no content, so the only source of truth is a
-        // fresh read of the path.
+        // fresh read.
         let file = try TempFile(contents: "# Opened")
         let scheduler = ManualScheduler()
         let document = LiveDocument(text: "# Stale in-memory copy", fileURL: file.url, scheduler: scheduler)
@@ -48,8 +48,8 @@ struct LiveDocumentTests {
     }
 
     @Test func keepsTheLastGoodDocumentWhenTheFileIsMidSave() throws {
-        // A save is briefly a missing path; blanking the window on the way past
-        // would be worse than content that is milliseconds stale.
+        // A save is briefly a missing file. Blanking the window on the way
+        // past would be worse than content a few milliseconds stale.
         let file = try TempFile(contents: "# Opened")
         let scheduler = ManualScheduler()
         let document = LiveDocument(text: "# Opened", fileURL: file.url, scheduler: scheduler)
@@ -66,8 +66,7 @@ struct LiveDocumentTests {
         let scheduler = ManualScheduler()
         let document = LiveDocument(text: "# Opened", fileURL: file.url, scheduler: scheduler)
 
-        // A half-written UTF-8 sequence — what a reader can catch an editor
-        // mid-write with.
+        // Half-written UTF-8: what catching an editor mid-write looks like.
         try file.writeBytes(Data([0xFF, 0xFE, 0xFD]))
         document.fileDidChange()
         scheduler.elapse()
@@ -76,9 +75,8 @@ struct LiveDocumentTests {
     }
 
     @Test func aChangeThatRendersIdenticallyCostsNoRepaint() throws {
-        // `touch`, a chmod, or a save of unchanged bytes. Publishing anyway
-        // would push an injection into the web view for nothing, against
-        // CONTEXT.md's second priority.
+        // `touch`, chmod, or a save of unchanged bytes. Publishing anyway
+        // would push an update into the web view for nothing.
         let file = try TempFile(contents: "# Opened")
         let scheduler = ManualScheduler()
         let document = LiveDocument(text: "# Opened", fileURL: file.url, scheduler: scheduler)
@@ -101,7 +99,7 @@ struct LiveDocumentTests {
     }
 
     @Test func aDocumentWithNoFileOnDiskSimplyHasNoLiveReload() {
-        // `DocumentGroup` can hand over a document with no URL; it should
+        // `DocumentGroup` can hand over a document with no URL. It should
         // render and then sit there, not crash and not watch anything.
         let document = LiveDocument(text: "# Untitled", fileURL: nil)
 
@@ -111,8 +109,7 @@ struct LiveDocumentTests {
     }
 
     @Test func aDocumentWhoseFileCannotBeWatchedStillRenders() {
-        // Live-reload is an enhancement to a document that is already on
-        // screen. Failing to watch must not fail the open.
+        // Failing to watch must not fail the open.
         let missing = URL(fileURLWithPath: "/nonexistent/\(UUID().uuidString).md")
 
         let document = LiveDocument(text: "# Opened", fileURL: missing)

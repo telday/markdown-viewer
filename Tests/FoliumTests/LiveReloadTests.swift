@@ -2,8 +2,8 @@ import Testing
 @testable import Folium
 
 /// The live-reload policy (issue #7). The interesting case is the atomic save:
-/// most editors write to a temporary file and rename it over the original, so a
-/// watch that only re-read on `write` would report the first save and then go
+/// most editors write a temporary file and rename it over the original, so a
+/// watch that only reacted to `write` would report the first save and then go
 /// silent forever.
 struct LiveReloadTests {
     @Test func anInPlaceWriteJustReloads() {
@@ -15,8 +15,8 @@ struct LiveReloadTests {
     }
 
     @Test func aRenameReloadsAndReopens() {
-        // An editor's atomic save: the path now names a different inode than
-        // the one the watch is holding open.
+        // An atomic save: the path now names a different file than the one
+        // the watch has open.
         #expect(LiveReload.reaction(to: .renamed) == LiveReload.Reaction(reloads: true, reopens: true))
     }
 
@@ -29,7 +29,7 @@ struct LiveReloadTests {
     }
 
     @Test func aNotificationCarryingSeveralFlagsStillReopens() {
-        // The kernel coalesces flags, so a save often arrives as one
+        // The kernel merges flags, so a save often arrives as a single
         // notification covering both the write and the rename.
         let reaction = LiveReload.reaction(to: [.written, .renamed])
         #expect(reaction == LiveReload.Reaction(reloads: true, reopens: true))
@@ -40,17 +40,17 @@ struct LiveReloadTests {
     }
 
     @Test func theCoalescingWindowLeavesRoomInTheRepaintBudget() {
-        // CONTEXT.md budgets 100 ms from "file written" to "repainted", and the
-        // window is spent out of it before the read or the render has started.
-        // This is the assertion that notices if someone widens it casually.
+        // CONTEXT.md budgets 100 ms from "file written" to "repainted", and
+        // the window is spent before the read or the render even starts. This
+        // is what notices if someone widens it casually.
         #expect(LiveReload.coalescingWindow < .milliseconds(100))
         #expect(LiveReload.coalescingWindow > .zero)
     }
 
     @Test func theReopenBudgetIsBoundedAndBriefEnoughToBeInvisible() {
-        // A file that is really gone must not leave a retry timer running for
-        // the life of the window, and a save that is only mid-flight has to be
-        // caught well inside the time a user would notice.
+        // A file that is really gone must not leave a timer running for the
+        // life of the window, and a save that is merely mid-flight has to be
+        // caught faster than a user would notice.
         #expect(LiveReload.reopenAttempts > 0)
         #expect(LiveReload.reopenRetryDelay * LiveReload.reopenAttempts <= .seconds(1))
     }

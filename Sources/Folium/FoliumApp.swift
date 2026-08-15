@@ -17,20 +17,16 @@ struct FoliumApp: App {
     }
 }
 
-/// The contents of one document window: the rendered document, kept live
-/// against the file on disk (issue #7).
+/// The contents of one document window, kept live against the file on disk
+/// (issue #7).
 ///
-/// This exists because `@StateObject` needs a `View` to live in — `DocumentGroup`'s
-/// content closure is not one — and because `DocumentGroup` reads the file
-/// exactly once, so the ongoing relationship with it has to be owned by
-/// something with a lifetime. That owner is `LiveDocument`, in the logic layer;
-/// all that is left here is holding onto one for as long as the window exists.
+/// This exists only because `@StateObject` has to live in a `View`, and
+/// `DocumentGroup`'s content closure isn't one. All it does is keep a
+/// `LiveDocument` alive for as long as the window is open.
 ///
-/// Part of the coverage-excluded `FoliumApp.swift` scene definition
-/// deliberately: keeping it here rather than in a file of its own means the
-/// exclusion list in `scripts/coverage.sh` does not grow, and there is nothing
-/// in it to test that `LiveDocumentTests` and `LiveReloadTests` don't already
-/// cover.
+/// Deliberately inside `FoliumApp.swift`, which is already excluded from the
+/// coverage requirement: a file of its own would grow the exclusion list in
+/// `scripts/coverage.sh` for something with nothing in it to test.
 private struct DocumentView: View {
     @StateObject private var document: LiveDocument
 
