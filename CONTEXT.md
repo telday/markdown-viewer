@@ -211,6 +211,9 @@ Use these terms; don't drift to synonyms.
   unit coverage, and therefore obliged to have integration coverage.
 - **Affordance** — a standard macOS behavior the user already expects. Priority
   1 is defined in terms of these.
+- **Live-reload** — an open document re-reading and re-rendering itself when
+  something else writes its file. Not "refresh": there is no refresh command,
+  because there is nothing for one to do (ADR 0006).
 - **Vendored asset** — third-party code committed as a real file in the bundle
   (highlight.js), never fetched at runtime.
 - **First-party asset** — CSS/JS/HTML authored here, living as real files under
