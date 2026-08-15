@@ -1,0 +1,76 @@
+# Comments
+
+> This doc is about *comments*. For which gates must pass, see
+> [definition-of-done.md](definition-of-done.md); for what to test and where,
+> see [testing.md](testing.md).
+
+## Who you are writing for
+
+**An experienced software engineer who has never written a macOS app.**
+
+Assume they know their craft. Concurrency, file descriptors, debouncing, retain
+cycles, the shape of a test suite — none of that needs explaining.
+
+Assume they know nothing about this platform. AppKit, SwiftUI, WebKit, Dispatch,
+`NSDocument`, the responder chain, how a `.app` bundle is laid out. That gap is
+what most comments here exist to close.
+
+## Comment the surprise
+
+The code already says what it does. A comment earns its place when the code is
+correct for a reason the reader cannot see — and on this platform that is
+usually a framework behaving in a way nobody would guess:
+
+- *"Dispatch crashes if a source is released without ever being resumed"* —
+  without it, `source.cancel(); source.resume()` reads as a mistake.
+- *"`DocumentGroup` reads the file once and hands over a plain value"* — without
+  it, `LiveDocument` reads as reinventing something the framework provides.
+- *"most editors save by writing a temporary file and renaming it over the
+  original"* — without it, the re-open logic reads as paranoia.
+
+If you learned something by running the built app, write it down along with what
+you actually observed. Those are the comments that save the next person from
+re-deriving it.
+
+## What not to write
+
+**Don't restate the repo's rules.** `scripts/coverage.sh` lists its own
+exclusions and `CONTEXT.md` states the priorities. Repeating them in a file
+header means they are now wrong in two places instead of one. One pointer beats
+a paragraph.
+
+**Don't argue for the code.** Explain it and stop. This came out of
+`FileWatcher`, and nothing was lost:
+
+```swift
+// Before
+/// Everything here is Dispatch and POSIX, with no SwiftUI/AppKit/WebKit
+/// dependency, so it stays in the unit-tested logic layer rather than joining
+/// the coverage-excluded glue: the failure mode this guards against — the
+/// watch surviving exactly one save and then going quiet forever — is
+/// precisely the kind that an untested file would ship with.
+
+// After — deleted. The one fact worth keeping ("a watch that survives exactly
+// one save looks like a file nobody edited") moved to the test that asserts it.
+```
+
+**Don't name-drop an API when a plain description is clearer.** "The kernel
+pushes notifications to us (via a Dispatch file-system source on an open
+descriptor)" tells the reader more than "a `DispatchSource` file-system source
+over an `O_EVTONLY` descriptor". Use the exact symbol when the reader will need
+to search for it; otherwise describe the behavior.
+
+**Don't cross-reference by reflex.** Link when the reader genuinely has to go
+there, not to show the thought connects to something.
+
+## Length
+
+A doc comment longer than the code it documents needs a reason. Usually the
+reason is real — a genuinely surprising platform behavior — and then it is
+fine. Sometimes it means the same point is being made three times.
+
+## Comments that are already there
+
+**Leave them alone.** This is how to write the comments *you* are writing. It is
+not a license to reformat comments in code you are not otherwise changing —
+that produces a diff nobody can review, mixed in with one they need to.

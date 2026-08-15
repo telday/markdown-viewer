@@ -27,6 +27,14 @@ interpreted by WebKit — see `docs/agents/testing.md`. The rule of thumb: test 
 seam this app owns (wiring, integration decisions), not the values our
 dependencies (cmark-gfm, GitHub's CSS) already test.
 
+## Comments
+
+Write for an experienced engineer who has never built a macOS app: assume the
+craft, explain the platform. Comment the surprise — the framework behavior that
+makes correct code look arbitrary — and skip everything else, including
+restatements of the rules above. Don't reformat comments in code you aren't
+otherwise changing. See `docs/agents/comments.md`.
+
 ## Agent skills
 
 ### Issue tracker
