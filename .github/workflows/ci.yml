@@ -14,7 +14,7 @@ jobs:
     name: Quality gates
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Package.swift is swift-tools-version 6.0, which needs Xcode 16+.
       # Select the newest Xcode present rather than hard-coding a point version.
