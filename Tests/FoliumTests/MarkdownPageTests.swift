@@ -3,12 +3,98 @@ import Testing
 @testable import Folium
 
 struct MarkdownPageTests {
+    // MARK: - resolveResourceBase
+
+    private static let appResources = URL(fileURLWithPath: "/Applications/Folium.app/Contents/Resources")
+    private static let moduleBundle = URL(fileURLWithPath: "/build/Folium_Folium.bundle")
+
+    /// An existence probe that says yes only for the shell under `bases`.
+    private static func shellPresent(under bases: [URL]) -> (URL) -> Bool {
+        let shells = Set(bases.map { $0.appendingPathComponent("Resources/page.html").path })
+        return { shells.contains($0.path) }
+    }
+
+    @Test func picksTheAppsOwnResourceDirectoryWhenTheShellIsThere() {
+        let base = MarkdownPage.resolveResourceBase(
+            candidates: [Self.appResources],
+            fallback: Self.moduleBundle,
+            fileExists: Self.shellPresent(under: [Self.appResources])
+        )
+
+        #expect(base == Self.appResources)
+    }
+
+    @Test func fallsBackToTheModuleBundleWhenTheAppHasNoShell() {
+        // The xctest and `swift run` cases: nothing has assembled an .app, so
+        // no candidate holds the shell and SPM's resource bundle is the answer.
+        let base = MarkdownPage.resolveResourceBase(
+            candidates: [Self.appResources],
+            fallback: Self.moduleBundle,
+            fileExists: Self.shellPresent(under: [])
+        )
+
+        #expect(base == Self.moduleBundle)
+    }
+
+    @Test func neverReachesForTheFallbackWhenACandidateWins() {
+        // Asking for the fallback bundle is not free: SPM's Bundle.module
+        // accessor fatalErrors when its bundle is missing, which is exactly
+        // the situation an app carrying its own resources is in.
+        var reachedForFallback = false
+        let base = MarkdownPage.resolveResourceBase(
+            candidates: [Self.appResources],
+            fallback: { reachedForFallback = true; return Self.moduleBundle }(),
+            fileExists: Self.shellPresent(under: [Self.appResources])
+        )
+
+        #expect(base == Self.appResources)
+        #expect(!reachedForFallback)
+    }
+
+    @Test func prefersEarlierCandidatesWhenSeveralHoldTheShell() {
+        // Ordering is the whole contract: a development build can leave a
+        // stale shell in more than one place, and the first candidate — the
+        // app's own — must win rather than whichever the file system reaches
+        // first.
+        let later = URL(fileURLWithPath: "/somewhere/else")
+        let candidates = [Self.appResources, later]
+        let probe = Self.shellPresent(under: candidates)
+
+        #expect(
+            MarkdownPage.resolveResourceBase(
+                candidates: candidates, fallback: Self.moduleBundle, fileExists: probe
+            ) == Self.appResources
+        )
+        #expect(
+            MarkdownPage.resolveResourceBase(
+                candidates: candidates.reversed(), fallback: Self.moduleBundle, fileExists: probe
+            ) == later
+        )
+    }
+
+    @Test func probesForTheShellItselfNotJustTheDirectory() {
+        // "Is the shell here?", not "does this directory exist?" — an .app
+        // whose resources failed to copy would otherwise win the resolution
+        // and render an unstyled document.
+        var probed: [String] = []
+        _ = MarkdownPage.resolveResourceBase(
+            candidates: [Self.appResources],
+            fallback: Self.moduleBundle,
+            fileExists: { probed.append($0.path); return false }
+        )
+
+        #expect(probed == [Self.appResources.appendingPathComponent("Resources/page.html").path])
+    }
+
+    // MARK: - resourceBaseURL
+
     @Test func resourceBaseURLPointsAtFoliumsOwnBundle() {
         // MarkdownWebView must resolve the shell's relative <link>/<script
         // src> references — and the loadFileURL read-access grant — against
         // this. Drift here (e.g. back to the wrong `resourceURL` property,
         // which points at a nonexistent path) would silently unstyle the
-        // whole app.
+        // whole app. Under the test runner the resolution takes its fallback
+        // branch, so this also proves the fallback yields a usable base.
         #expect(MarkdownPage.resourceBaseURL.isFileURL)
         #expect(MarkdownPage.resourceBaseURL.lastPathComponent.hasSuffix(".bundle"))
     }
