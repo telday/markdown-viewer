@@ -7,7 +7,19 @@
 APP_NAME    := Folium
 BUNDLE_ID   := com.telday.Folium
 CONFIG      := release
-BUILD_DIR   := .build/$(CONFIG)
+# Universal, so one bundle runs natively on Apple Silicon and on Intel rather
+# than under Rosetta on one of them. Asking for a second architecture hands
+# the build to Xcode's build system, which needs Xcode itself installed and
+# selected — the Command Line Tools alone do not carry it (see ADR 0002's
+# 2026-08-16 amendment).
+ARCH_FLAGS  := --arch arm64 --arch x86_64
+# Ask the Swift Package Manager where the products landed instead of
+# hardcoding it. Xcode's build system puts them somewhere else entirely
+# (.build/apple/Products/Release, against .build/arm64-apple-macosx/release),
+# so the path follows the flags above. Deferred (`=`, not `:=`) so only the
+# recipes that use it pay for the extra swift invocation.
+BUILD_DIR    = $(or $(shell swift build -c $(CONFIG) $(ARCH_FLAGS) --show-bin-path), \
+                    $(error could not read the products directory from swift build))
 # Assemble the bundle under .build/ so the build artifact isn't left in the
 # project directory, where Spotlight would index it as a second Folium app.
 APP_BUNDLE  := .build/$(APP_NAME).app
@@ -61,9 +73,9 @@ coverage: vendor
 vendor:
 	./scripts/vendor-highlightjs.sh
 
-## Compile the release binary.
+## Compile the release binary, universal for both Mac architectures.
 build: vendor
-	swift build -c $(CONFIG)
+	swift build -c $(CONFIG) $(ARCH_FLAGS)
 
 ## Assemble and ad-hoc sign $(APP_BUNDLE) from the release binary.
 bundle: build
