@@ -3,83 +3,36 @@ import Testing
 @testable import Folium
 
 struct MarkdownPageTests {
-    // MARK: - resolveResourceBase
+    // MARK: - appResourceBase
 
     private static let appResources = URL(fileURLWithPath: "/Applications/Folium.app/Contents/Resources")
-    private static let moduleBundle = URL(fileURLWithPath: "/build/Folium_Folium.bundle")
 
-    /// A stand-in file system, in which the shell exists under `bases` and
-    /// nowhere else.
-    private static func shellPresent(under bases: [URL]) -> (URL) -> Bool {
-        let shells = Set(bases.map { $0.appendingPathComponent("Resources/page.html").path })
-        return { shells.contains($0.path) }
-    }
-
-    @Test func picksTheAppsOwnResourceDirectoryWhenTheShellIsThere() {
-        let base = MarkdownPage.resolveResourceBase(
-            candidates: [Self.appResources],
-            fallback: Self.moduleBundle,
-            fileExists: Self.shellPresent(under: [Self.appResources])
-        )
+    @Test func claimsTheAppsResourceDirectoryWhenTheShellIsInIt() {
+        let base = MarkdownPage.appResourceBase(Self.appResources, fileExists: { _ in true })
 
         #expect(base == Self.appResources)
     }
 
-    @Test func fallsBackToTheModuleBundleWhenTheAppHasNoShell() {
-        // The `swift run` and `swift test` case. No .app has been assembled,
-        // so no candidate holds the shell.
-        let base = MarkdownPage.resolveResourceBase(
-            candidates: [Self.appResources],
-            fallback: Self.moduleBundle,
-            fileExists: Self.shellPresent(under: [])
-        )
+    @Test func declinesTheAppsResourceDirectoryWhenTheShellIsNot() {
+        // Being inside an .app is not the test. Its resources can live
+        // elsewhere, or fail to copy, and then the caller must fall back.
+        let base = MarkdownPage.appResourceBase(Self.appResources, fileExists: { _ in false })
 
-        #expect(base == Self.moduleBundle)
+        #expect(base == nil)
     }
 
-    @Test func neverReachesForTheFallbackWhenACandidateWins() {
-        // Asking for the fallback bundle is not free. Bundle.module crashes
-        // when its resource bundle is missing, and an app carrying its own
-        // resources is the case where it is missing.
-        var reachedForFallback = false
-        let base = MarkdownPage.resolveResourceBase(
-            candidates: [Self.appResources],
-            fallback: { reachedForFallback = true; return Self.moduleBundle }(),
-            fileExists: Self.shellPresent(under: [Self.appResources])
-        )
-
-        #expect(base == Self.appResources)
-        #expect(!reachedForFallback)
+    @Test func declinesWhenThereIsNoResourceDirectoryAtAll() {
+        // Bundle.main.resourceURL is optional, and a bare executable has none.
+        #expect(MarkdownPage.appResourceBase(nil, fileExists: { _ in true }) == nil)
     }
 
-    @Test func prefersEarlierCandidatesWhenSeveralHoldTheShell() {
-        // A development build can leave a stale shell in more than one place.
-        // When that happens the earlier candidate wins, not whichever one the
-        // file system reaches first.
-        let later = URL(fileURLWithPath: "/somewhere/else")
-        let candidates = [Self.appResources, later]
-        let probe = Self.shellPresent(under: candidates)
-
-        #expect(
-            MarkdownPage.resolveResourceBase(
-                candidates: candidates, fallback: Self.moduleBundle, fileExists: probe
-            ) == Self.appResources
-        )
-        #expect(
-            MarkdownPage.resolveResourceBase(
-                candidates: candidates.reversed(), fallback: Self.moduleBundle, fileExists: probe
-            ) == later
-        )
-    }
-
-    @Test func probesForTheShellItselfNotJustTheDirectory() {
+    @Test func looksForTheShellItselfNotJustTheDirectory() {
         // The probe is handed the shell's path, not the directory's. An .app
-        // whose resources failed to copy would otherwise win the resolution
+        // whose resources failed to copy would otherwise claim the directory
         // and render an unstyled document.
         var probed: [String] = []
-        _ = MarkdownPage.resolveResourceBase(
-            candidates: [Self.appResources],
-            fallback: Self.moduleBundle,
+        _ = MarkdownPage.appResourceBase(
+            Self.appResources,
             fileExists: { probed.append($0.path); return false }
         )
 
