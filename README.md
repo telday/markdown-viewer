@@ -9,6 +9,9 @@ decisions behind the app).
 - macOS 14 (Sonoma) or later
 - Swift toolchain with the Swift Package Manager (`swift build`), from Xcode 16
   or the matching Command Line Tools
+- Xcode itself — installed and selected (`xcode-select -p`) — to run
+  `make bundle` / `make install`, which build universal (see below). The
+  Command Line Tools alone cover everything else, including `make check`.
 
 ## Install from source
 
@@ -18,10 +21,17 @@ From a clean checkout:
 make install
 ```
 
-This builds a release binary (`swift build -c release`), assembles a
-`Folium.app` bundle with its `Info.plist` and app icon, ad-hoc signs it so it launches
-without Gatekeeper complaints on the machine that built it, and copies it to
-`/Applications`.
+This builds a universal release binary (`swift build -c release --arch arm64
+--arch x86_64`, so one bundle runs natively on both Apple Silicon and Intel
+Macs), assembles a `Folium.app` bundle with its `Info.plist` and app icon,
+ad-hoc signs it so it launches without Gatekeeper complaints on the machine
+that built it, and copies it to `/Applications`.
+
+Only the packaged build is universal. `swift build` / `swift test` /
+`swift run` stay single-architecture, so the development loop doesn't pay for
+compiling everything twice. Asking for two architectures also hands the build
+to Xcode's build system, which is why the packaged build needs Xcode installed
+and selected — see [ADR 0002](docs/adr/0002-spm-build-system.md)'s amendment.
 
 Launch it from Spotlight, Launchpad, or:
 
@@ -87,15 +97,21 @@ contents into a Swift `String`.
 `make vendor` run at least once first**, since the vendored (not first-party)
 resource files won't exist yet.
 
-**`make bundle`/`make install` copy the SPM resource bundle into the `.app`
-*after* code-signing it**, not before: SPM's generated resource accessor
-looks for `Folium_Folium.bundle` as a sibling of the `.app` itself, but
-`codesign` refuses to seal a bundle with anything outside `Contents/` at its
-root. Signing first and adding the resource bundle after still produces a
-working app (verified by hiding every other fallback path and confirming it
-still launches and finds its resources) — `codesign --verify` will flag the
-added directory as unsealed, which only matters if this project ever moves
-beyond ad-hoc signing (see ADR 0003).
+**`make bundle`/`make install` copy both sets of files into
+`Contents/Resources/` before code-signing**, at the same relative paths SPM's
+generated bundle uses (`Resources/page.html`, `HighlightJS/…`), so the
+signature seals them: `ls` on the assembled `.app` shows `Contents` and
+nothing else, and `codesign --verify --strict` passes. The app finds them
+through its own `Bundle.main.resourceURL` (`MarkdownPage.resourceBaseURL`),
+which is why `Folium.app` runs correctly after being dragged to
+`/Applications` or onto a machine that never built it. The copy comes from the
+source tree rather than from SPM's generated bundle, so the `.app` doesn't
+inherit whichever name and layout the SPM build system in use produces.
+
+`Bundle.module` is the fallback, used only by `swift run`/`swift test`, which
+assemble no `.app`. Don't make it the primary: its accessor resolves the
+resource bundle as a sibling of the `.app`, which puts resources at the bundle
+root — where `codesign` refuses to seal them (see ADR 0003).
 
 **The app icon is committed as PNGs, not as an `.icns`.** `packaging/Folium.iconset/`
 holds the ten sizes macOS asks for and `packaging/Folium.svg` is the vector

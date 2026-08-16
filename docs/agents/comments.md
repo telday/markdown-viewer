@@ -32,6 +32,44 @@ If you learned something by running the built app, write it down along with what
 you actually observed. Those are the comments that save the next person from
 re-deriving it.
 
+## Say it plainly
+
+A comment that has to be re-read has failed, however accurate it is. Four rules,
+in the order they go wrong:
+
+**Spell an abbreviation out the first time a file uses it.** "SPM" costs the
+reader a search; "the Swift Package Manager (SPM)" costs four words. The same
+goes for anything that reads as insider shorthand: the tool, the framework, the
+build step — name it once in full.
+
+**One idea per sentence.** Most unreadable comments here are one sentence
+carrying three facts, held together by a dash, a colon, and a subordinate
+clause. Split them. Two plain sentences beat one clever one.
+
+**Cut words that carry nothing.** *actually, really, simply, just, merely,
+quite, of course, note that, at all, in every case, it is worth noting.* They
+survive from a first draft where the writer was persuading themselves. Delete
+them and check the sentence still says the same thing — it will.
+
+**Use ordinary verbs, not API names as verbs.** "Crashes" reads faster than
+"`fatalError`s". Name the symbol when the reader needs to search for it, then
+describe what it does in English.
+
+```swift
+// Before — one sentence, three facts, two qualifiers.
+/// `fallback` is `@autoclosure` because reaching for a bundle can be fatal,
+/// not merely empty: SPM's generated `Bundle.module` accessor `fatalError`s
+/// when it can't find its resource bundle. Evaluating it eagerly would crash
+/// an app that has its own resources and never needed the fallback at all.
+
+// After.
+/// `fallback` is `@autoclosure` so it is only evaluated if it is used.
+/// The Swift Package Manager generates the `Bundle.module` accessor, and
+/// that accessor crashes when its resource bundle is missing. An app
+/// carrying its own resources never needs the fallback, and must not
+/// crash reaching for it.
+```
+
 ## What not to write
 
 **Don't restate the repo's rules.** `scripts/coverage.sh` lists its own

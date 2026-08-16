@@ -7,11 +7,24 @@
 APP_NAME    := Folium
 BUNDLE_ID   := com.telday.Folium
 CONFIG      := release
-BUILD_DIR   := .build/$(CONFIG)
+# Universal, so one bundle runs natively on Apple Silicon and on Intel rather
+# than under Rosetta on one of them. Asking for a second architecture hands
+# the build to Xcode's build system, which needs Xcode itself installed and
+# selected — the Command Line Tools alone do not carry it (see ADR 0002's
+# 2026-08-16 amendment).
+ARCH_FLAGS  := --arch arm64 --arch x86_64
+# Ask the Swift Package Manager where the products landed instead of
+# hardcoding it. Xcode's build system puts them somewhere else entirely
+# (.build/apple/Products/Release, against .build/arm64-apple-macosx/release),
+# so the path follows the flags above. Deferred (`=`, not `:=`) so only the
+# recipes that use it pay for the extra swift invocation.
+BUILD_DIR    = $(or $(shell swift build -c $(CONFIG) $(ARCH_FLAGS) --show-bin-path), \
+                    $(error could not read the products directory from swift build))
 # Assemble the bundle under .build/ so the build artifact isn't left in the
 # project directory, where Spotlight would index it as a second Folium app.
 APP_BUNDLE  := .build/$(APP_NAME).app
 CONTENTS    := $(APP_BUNDLE)/Contents
+SOURCE_DIR  := Sources/$(APP_NAME)
 INSTALL_DIR := /Applications
 INSTALLED   := $(INSTALL_DIR)/$(APP_NAME).app
 
@@ -60,9 +73,9 @@ coverage: vendor
 vendor:
 	./scripts/vendor-highlightjs.sh
 
-## Compile the release binary.
+## Compile the release binary, universal for both Mac architectures.
 build: vendor
-	swift build -c $(CONFIG)
+	swift build -c $(CONFIG) $(ARCH_FLAGS)
 
 ## Assemble and ad-hoc sign $(APP_BUNDLE) from the release binary.
 bundle: build
@@ -78,21 +91,14 @@ bundle: build
 	iconutil --convert icns --output "$(CONTENTS)/Resources/$(APP_NAME).icns" \
 		packaging/$(APP_NAME).iconset
 	printf 'APPL????' > "$(CONTENTS)/PkgInfo"
+	# The page shell and its CSS/JS, at the paths MarkdownPage.resourceBaseURL
+	# resolves against. Taken from the source tree, not from the resource
+	# bundle the Swift Package Manager generates, so the .app doesn't inherit
+	# that bundle's name and layout. See ADR 0003's 2026-08-16 amendment.
+	cp -R "$(SOURCE_DIR)/Resources" "$(CONTENTS)/Resources/Resources"
+	cp -R "$(SOURCE_DIR)/Vendor/HighlightJS" "$(CONTENTS)/Resources/HighlightJS"
+	# Signing comes last: a signature seals the files present when it runs.
 	codesign --force --sign - --identifier "$(BUNDLE_ID)" "$(APP_BUNDLE)"
-	# SPM's generated Bundle.module accessor looks for the resource bundle as
-	# a sibling of the .app itself (Bundle.main.bundleURL), not inside
-	# Contents/Resources — its other fallback is a dev-machine-only absolute
-	# .build path, so skipping this silently produces an app that only
-	# happens to work on the machine it was built on and fatalErrors/crashes
-	# on launch anywhere else. Copied in *after* signing: codesign refuses to
-	# seal a bundle with anything outside Contents/ at its root ("unsealed
-	# contents present in the bundle root"), confirmed by testing both
-	# orders. Signing first and adding this after still launches correctly
-	# (verified by hiding the fallback .build path entirely and confirming
-	# the app still finds its resources); `codesign --verify` will flag the
-	# added directory as unsealed, which only matters if this ever moves
-	# beyond ad-hoc signing (see ADR 0003).
-	cp -R "$(BUILD_DIR)/$(APP_NAME)_$(APP_NAME).bundle" "$(APP_BUNDLE)/$(APP_NAME)_$(APP_NAME).bundle"
 	@echo "Built $(APP_BUNDLE)"
 
 ## Install the bundle to /Applications.

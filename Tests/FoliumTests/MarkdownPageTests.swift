@@ -3,12 +3,15 @@ import Testing
 @testable import Folium
 
 struct MarkdownPageTests {
+    // MARK: - resourceBaseURL
+
     @Test func resourceBaseURLPointsAtFoliumsOwnBundle() {
         // MarkdownWebView must resolve the shell's relative <link>/<script
         // src> references — and the loadFileURL read-access grant — against
         // this. Drift here (e.g. back to the wrong `resourceURL` property,
         // which points at a nonexistent path) would silently unstyle the
-        // whole app.
+        // whole app. Under the test runner the resolution takes its fallback
+        // branch, so this also proves the fallback yields a usable base.
         #expect(MarkdownPage.resourceBaseURL.isFileURL)
         #expect(MarkdownPage.resourceBaseURL.lastPathComponent.hasSuffix(".bundle"))
     }
