@@ -56,6 +56,24 @@ Adding a file to the exclusion list is a deliberate change to
 `scripts/coverage.sh` — do it only for genuinely unreachable host glue, and call
 it out in the PR.
 
+### The gate is a floor, not a target
+
+97% is the line the build must not fall below. It is not a score to maximise,
+and the last few lines are not worth deforming the code to reach.
+
+A handful of lines that only run inside a real `.app` — a `Bundle.main` lookup,
+an `NSWorkspace` call — can sit in a covered file and go unexecuted by the unit
+tests. That is fine while the gate holds. What is not fine is inverting a
+readable piece of code into injected closures and stub parameters so that a
+test can drive it, when the test then exercises the stub rather than the
+platform. Check the actual number before assuming the gate forces your hand:
+this rule exists because issue #34 was specified around a coverage constraint
+that turned out to cost 0.27 points.
+
+Where the untested lines are a real risk, the honest guard is usually a level
+up — an integration test, or a check against the assembled bundle — not a unit
+test with the platform stubbed out.
+
 ### Exclusion obliges integration coverage
 
 **"Excluded from unit coverage" must never come to mean "untested."** Any file

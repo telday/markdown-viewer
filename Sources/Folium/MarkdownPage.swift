@@ -22,23 +22,44 @@ import Foundation
 /// lives in the unit-testable logic layer rather than in `MarkdownWebView`
 /// glue.
 enum MarkdownPage {
+    /// Where the shell sits inside whichever base wins below. Its CSS and JS
+    /// sit beside it at the same relative paths wherever it is, so the base
+    /// is the only thing left to choose.
+    static let pageRelativePath = "Resources/page.html"
+
     /// The base URL `page.html`'s relative `<link>`/`<script src>`
     /// references resolve against, and the read-access grant
-    /// `MarkdownWebView` passes to `loadFileURL`: Folium's own resource
-    /// bundle. `bundleURL`, not `resourceURL` — the latter assumes a
-    /// `Contents/Resources` substructure that SPM's flat, loose resource
-    /// bundles don't have, and silently points at a nonexistent path
-    /// (`Folium_Folium.bundle/Resources/`) instead.
+    /// `MarkdownWebView` passes to `loadFileURL`.
     ///
-    /// Exposed here (not just used inline in `MarkdownWebView`) because
-    /// tests that load the shell outside `MarkdownWebView` need the same
-    /// value — referencing `Bundle.module` directly from a test file is
-    /// ambiguous once that test target has its own resources and also
-    /// `@testable import`s Folium.
-    static let resourceBaseURL = Bundle.module.bundleURL
+    /// A Mac app keeps files like these in `Contents/Resources`, which is
+    /// what `Bundle.main.resourceURL` names and the only place a code
+    /// signature can seal them. The check is for the shell itself, not for
+    /// "am I inside an app": an app whose resources live elsewhere, or
+    /// failed to copy, is still an app.
+    ///
+    /// `swift run` and `swift test` assemble no `.app` and fall through to
+    /// the bundle the Swift Package Manager (SPM) generates. That one is
+    /// reached by `bundleURL`, not `resourceURL`: it is flat, with no
+    /// `Contents/Resources` inside it. It also comes last because SPM's
+    /// generated `Bundle.module` accessor crashes, rather than returning
+    /// nil, when its bundle is missing.
+    ///
+    /// Exposed here, rather than used inline in `MarkdownWebView`, because
+    /// tests that load the shell need the same value. A test file cannot
+    /// name `Bundle.module` itself — that is ambiguous once the test target
+    /// has its own resources and also `@testable import`s Folium.
+    static let resourceBaseURL: URL = {
+        if let appResources = Bundle.main.resourceURL,
+           FileManager.default.fileExists(
+               atPath: appResources.appendingPathComponent(pageRelativePath).path
+           ) {
+            return appResources
+        }
+        return Bundle.module.bundleURL
+    }()
 
     /// The static page shell `MarkdownWebView` loads once via `loadFileURL`.
-    static let pageURL = resourceBaseURL.appendingPathComponent("Resources/page.html")
+    static let pageURL = resourceBaseURL.appendingPathComponent(pageRelativePath)
 
     /// Builds the `evaluateJavaScript` call that renders `bodyHTML` (run
     /// through `CodeBlockDecorator` first) into the already-loaded shell's
