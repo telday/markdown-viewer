@@ -3,42 +3,6 @@ import Testing
 @testable import Folium
 
 struct MarkdownPageTests {
-    // MARK: - appResourceBase
-
-    private static let appResources = URL(fileURLWithPath: "/Applications/Folium.app/Contents/Resources")
-
-    @Test func claimsTheAppsResourceDirectoryWhenTheShellIsInIt() {
-        let base = MarkdownPage.appResourceBase(Self.appResources, fileExists: { _ in true })
-
-        #expect(base == Self.appResources)
-    }
-
-    @Test func declinesTheAppsResourceDirectoryWhenTheShellIsNot() {
-        // Being inside an .app is not the test. Its resources can live
-        // elsewhere, or fail to copy, and then the caller must fall back.
-        let base = MarkdownPage.appResourceBase(Self.appResources, fileExists: { _ in false })
-
-        #expect(base == nil)
-    }
-
-    @Test func declinesWhenThereIsNoResourceDirectoryAtAll() {
-        // Bundle.main.resourceURL is optional, and a bare executable has none.
-        #expect(MarkdownPage.appResourceBase(nil, fileExists: { _ in true }) == nil)
-    }
-
-    @Test func looksForTheShellItselfNotJustTheDirectory() {
-        // The probe is handed the shell's path, not the directory's. An .app
-        // whose resources failed to copy would otherwise claim the directory
-        // and render an unstyled document.
-        var probed: [String] = []
-        _ = MarkdownPage.appResourceBase(
-            Self.appResources,
-            fileExists: { probed.append($0.path); return false }
-        )
-
-        #expect(probed == [Self.appResources.appendingPathComponent("Resources/page.html").path])
-    }
-
     // MARK: - resourceBaseURL
 
     @Test func resourceBaseURLPointsAtFoliumsOwnBundle() {

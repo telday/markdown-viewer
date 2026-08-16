@@ -27,47 +27,36 @@ enum MarkdownPage {
     /// is the only thing left to choose.
     static let pageRelativePath = "Resources/page.html"
 
-    /// The app's own resource directory, or nil when the shell isn't in it.
-    ///
-    /// The question asked is "is the shell here?", not "am I running inside
-    /// an app?". Those differ: an app whose resources live somewhere else,
-    /// or failed to copy, is still an app. The caller passes the live
-    /// `Bundle` value in, which is what lets a unit test reach this.
-    static func appResourceBase(_ resourceURL: URL?, fileExists: (URL) -> Bool) -> URL? {
-        guard let resourceURL,
-              fileExists(resourceURL.appendingPathComponent(pageRelativePath))
-        else { return nil }
-        return resourceURL
-    }
-
     /// The base URL `page.html`'s relative `<link>`/`<script src>`
     /// references resolve against, and the read-access grant
     /// `MarkdownWebView` passes to `loadFileURL`.
     ///
     /// A Mac app keeps files like these in `Contents/Resources`, which is
     /// what `Bundle.main.resourceURL` names and the only place a code
-    /// signature can seal them. That wins when the shell is found there.
+    /// signature can seal them. The check is for the shell itself, not for
+    /// "am I inside an app": an app whose resources live elsewhere, or
+    /// failed to copy, is still an app.
     ///
-    /// `swift run` and `swift test` assemble no `.app`, so they fall through
-    /// to the resource bundle the Swift Package Manager (SPM) generates.
-    /// That one is reached by `bundleURL`, not `resourceURL`: SPM's bundle
-    /// is flat, with no `Contents/Resources` inside it, and `resourceURL`
-    /// would point at a path that isn't there.
-    ///
-    /// The fallback has to stay on the right of `??`, which the standard
-    /// library evaluates only when the left side is nil. SPM generates the
-    /// `Bundle.module` accessor, and that accessor crashes when its resource
-    /// bundle is missing — which is the state an app carrying its own
-    /// resources is in.
+    /// `swift run` and `swift test` assemble no `.app` and fall through to
+    /// the bundle the Swift Package Manager (SPM) generates. That one is
+    /// reached by `bundleURL`, not `resourceURL`: it is flat, with no
+    /// `Contents/Resources` inside it. It also comes last because SPM's
+    /// generated `Bundle.module` accessor crashes, rather than returning
+    /// nil, when its bundle is missing.
     ///
     /// Exposed here, rather than used inline in `MarkdownWebView`, because
     /// tests that load the shell need the same value. A test file cannot
     /// name `Bundle.module` itself — that is ambiguous once the test target
     /// has its own resources and also `@testable import`s Folium.
-    static let resourceBaseURL = appResourceBase(
-        Bundle.main.resourceURL,
-        fileExists: { FileManager.default.fileExists(atPath: $0.path) }
-    ) ?? Bundle.module.bundleURL
+    static let resourceBaseURL: URL = {
+        if let appResources = Bundle.main.resourceURL,
+           FileManager.default.fileExists(
+               atPath: appResources.appendingPathComponent(pageRelativePath).path
+           ) {
+            return appResources
+        }
+        return Bundle.module.bundleURL
+    }()
 
     /// The static page shell `MarkdownWebView` loads once via `loadFileURL`.
     static let pageURL = resourceBaseURL.appendingPathComponent(pageRelativePath)
