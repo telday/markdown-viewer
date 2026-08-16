@@ -12,9 +12,7 @@ BUILD_DIR   := .build/$(CONFIG)
 # project directory, where Spotlight would index it as a second Folium app.
 APP_BUNDLE  := .build/$(APP_NAME).app
 CONTENTS    := $(APP_BUNDLE)/Contents
-# The first-party and vendored assets, taken from the source tree — see the
-# copy step in `bundle`.
-RESOURCE_SRC := Sources/$(APP_NAME)
+SOURCE_DIR  := Sources/$(APP_NAME)
 INSTALL_DIR := /Applications
 INSTALLED   := $(INSTALL_DIR)/$(APP_NAME).app
 
@@ -82,15 +80,12 @@ bundle: build
 		packaging/$(APP_NAME).iconset
 	printf 'APPL????' > "$(CONTENTS)/PkgInfo"
 	# The page shell and its CSS/JS, at the paths MarkdownPage.resourceBaseURL
-	# resolves against: the same layout SPM's generated resource bundle has,
-	# rooted at Contents/Resources instead. Copied from the source tree rather
-	# than from that generated bundle, so the .app doesn't inherit whichever
-	# name and layout the SPM build system in use happens to produce.
-	cp -R "$(RESOURCE_SRC)/Resources" "$(CONTENTS)/Resources/Resources"
-	cp -R "$(RESOURCE_SRC)/Vendor/HighlightJS" "$(CONTENTS)/Resources/HighlightJS"
-	# Last: codesign seals what is in the bundle at signing time, and refuses
-	# to sign at all if anything sits outside Contents/ at the bundle root
-	# ("unsealed contents present in the bundle root").
+	# resolves against. Taken from the source tree, not from the resource
+	# bundle the Swift Package Manager generates, so the .app doesn't inherit
+	# that bundle's name and layout. See ADR 0003's 2026-08-16 amendment.
+	cp -R "$(SOURCE_DIR)/Resources" "$(CONTENTS)/Resources/Resources"
+	cp -R "$(SOURCE_DIR)/Vendor/HighlightJS" "$(CONTENTS)/Resources/HighlightJS"
+	# Signing comes last: a signature seals the files present when it runs.
 	codesign --force --sign - --identifier "$(BUNDLE_ID)" "$(APP_BUNDLE)"
 	@echo "Built $(APP_BUNDLE)"
 

@@ -37,10 +37,11 @@ App Sandbox.
 
 The second consequence above — that Developer ID signing and notarization are
 eventually needed — was until now blocked by a compromise in `make bundle`.
-It copied SPM's generated `Folium_Folium.bundle` to the `.app`'s *root*, after
-`codesign` ran, because SPM's generated `Bundle.module` accessor resolves that
-bundle as a sibling of `Bundle.main.bundleURL` (its other candidate being an
-absolute `.build` path on the build machine). `codesign` refuses to sign a
+It copied the resource bundle the Swift Package Manager (SPM) generates,
+`Folium_Folium.bundle`, to the `.app`'s *root*, after `codesign` ran. SPM's
+generated `Bundle.module` accessor resolves that bundle as a sibling of
+`Bundle.main.bundleURL`; its only other candidate is an absolute `.build` path
+on the build machine. `codesign` refuses to sign a
 bundle with anything outside `Contents/` at its root, so the copy had to come
 last, and `codesign --verify --strict` reported the result as unsealed.
 
