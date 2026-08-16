@@ -33,6 +33,29 @@ App Sandbox.
 
 ## Amendments
 
+### 2026-08-16 — the bundle is sealable: resources live in `Contents/Resources`
+
+The second consequence above — that Developer ID signing and notarization are
+eventually needed — was until now blocked by a compromise in `make bundle`.
+It copied SPM's generated `Folium_Folium.bundle` to the `.app`'s *root*, after
+`codesign` ran, because SPM's generated `Bundle.module` accessor resolves that
+bundle as a sibling of `Bundle.main.bundleURL` (its other candidate being an
+absolute `.build` path on the build machine). `codesign` refuses to sign a
+bundle with anything outside `Contents/` at its root, so the copy had to come
+last, and `codesign --verify --strict` reported the result as unsealed.
+
+`make bundle` now copies the first-party and vendored assets from the source
+tree into `Contents/Resources/` before signing, and the app resolves them
+against its own `Bundle.main.resourceURL` rather than `Bundle.module`
+(`MarkdownPage.resourceBaseURL`). The signature seals every resource, `ls` on
+the `.app` shows `Contents` and nothing else, and the bundle launches wherever
+it is copied to.
+
+**Do not "simplify" the resource lookup back to `Bundle.module`.** It is not
+a redundant indirection: it is what keeps the resources inside `Contents/`,
+and therefore what makes the bundle signable at all. `Bundle.module` remains
+the fallback only for `swift run`/`swift test`, which assemble no `.app`.
+
 ### 2026-08-13 — "relative links/images work simply and directly" is not yet true
 
 The rejected-options section argues that sandboxing would require "care around
