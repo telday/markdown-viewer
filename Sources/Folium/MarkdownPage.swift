@@ -22,24 +22,24 @@ import Foundation
 /// lives in the unit-testable logic layer rather than in `MarkdownWebView`
 /// glue.
 enum MarkdownPage {
-    /// Where the shell sits inside whichever base wins below. The assets it
-    /// references sit alongside it at the same relative paths in every case,
-    /// which is why choosing a base is the only decision to make.
+    /// Where the shell sits inside whichever base wins below. Its CSS and JS
+    /// sit beside it at the same relative paths wherever it is, so the base
+    /// is the only thing left to choose.
     static let pageRelativePath = "Resources/page.html"
 
     /// Picks the directory the shell and its assets are read from: the first
-    /// candidate that actually holds the shell, or `fallback` when none does.
+    /// candidate that holds the shell, or `fallback` when none does.
     ///
-    /// The probe is "is the shell here?" rather than "am I running inside an
-    /// app?", so an installed app and a test run are one code path with
-    /// different inputs. The live `Bundle` values are the caller's to supply,
-    /// which is also what keeps this reachable from a unit test.
+    /// The question asked is "is the shell here?", not "am I running inside
+    /// an app?". An installed app and a test run take the same path through
+    /// this code, with different inputs. The caller supplies the live
+    /// `Bundle` values, which is what lets a unit test reach this.
     ///
-    /// `fallback` is `@autoclosure` because reaching for a bundle can be
-    /// fatal, not merely empty: SPM's generated `Bundle.module` accessor
-    /// `fatalError`s when it can't find its resource bundle. Evaluating it
-    /// eagerly would crash an app that has its own resources and never needed
-    /// the fallback at all.
+    /// `fallback` is `@autoclosure` so it is only evaluated if it is used.
+    /// The Swift Package Manager (SPM) generates the `Bundle.module`
+    /// accessor, and that accessor crashes when its resource bundle is
+    /// missing. An app carrying its own resources never needs the fallback,
+    /// and must not crash reaching for it.
     static func resolveResourceBase(
         candidates: [URL],
         fallback: @autoclosure () -> URL,
@@ -52,20 +52,20 @@ enum MarkdownPage {
     /// references resolve against, and the read-access grant
     /// `MarkdownWebView` passes to `loadFileURL`.
     ///
-    /// A Mac app keeps files like these in `Contents/Resources` — the
-    /// directory `Bundle.main.resourceURL` names, and the only place a code
-    /// signature can seal them — so that is what wins when the shell is found
-    /// there. Nothing has assembled a `.app` during `swift run` or `swift
-    /// test`, so those runs fall through to SPM's generated resource bundle:
-    /// reached by `bundleURL`, not `resourceURL`, because the latter assumes
-    /// a `Contents/Resources` substructure that SPM's flat, loose bundle
-    /// doesn't have and silently points at a nonexistent path.
+    /// A Mac app keeps files like these in `Contents/Resources`, which is
+    /// what `Bundle.main.resourceURL` names and the only place a code
+    /// signature can seal them. That wins when the shell is found there.
     ///
-    /// Exposed here (not just used inline in `MarkdownWebView`) because
-    /// tests that load the shell outside `MarkdownWebView` need the same
-    /// value — referencing `Bundle.module` directly from a test file is
-    /// ambiguous once that test target has its own resources and also
-    /// `@testable import`s Folium.
+    /// `swift run` and `swift test` assemble no `.app`, so they fall through
+    /// to the resource bundle SPM generates. That one is reached by
+    /// `bundleURL`, not `resourceURL`: SPM's bundle is flat, with no
+    /// `Contents/Resources` inside it, and `resourceURL` would point at a
+    /// path that isn't there.
+    ///
+    /// Exposed here, rather than used inline in `MarkdownWebView`, because
+    /// tests that load the shell need the same value. A test file cannot
+    /// name `Bundle.module` itself — that is ambiguous once the test target
+    /// has its own resources and also `@testable import`s Folium.
     static let resourceBaseURL = resolveResourceBase(
         candidates: [Bundle.main.resourceURL].compactMap { $0 },
         fallback: Bundle.module.bundleURL,
