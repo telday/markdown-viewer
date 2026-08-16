@@ -39,6 +39,26 @@ Launch it from Spotlight, Launchpad, or:
 open /Applications/Folium.app
 ```
 
+### The version in the bundle
+
+`make bundle` and `make install` stamp a version into the assembled bundle's
+`Info.plist`, which is where Finder's Get Info and the About box read it from:
+
+```sh
+make install VERSION=1.2.0
+# or from the environment:
+VERSION=1.2.0 make install
+```
+
+With no `VERSION`, the bundle carries `0.0.0-dev`. `packaging/Info.plist` is a
+template: the stamping happens on the copy inside the bundle, so a build never
+modifies the checkout.
+
+The build number (`CFBundleVersion`, which macOS compares between two copies of
+the same app) comes from the commit count. Counting needs the whole history, so
+build from a full clone — in a shallow one every build gets the same number, and
+`make bundle` says so. `BUILD_NUM=` overrides it where that isn't possible.
+
 ### Other make targets
 
 - `make bundle` — build and assemble `Folium.app` under `.build/` without
