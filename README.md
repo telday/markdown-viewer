@@ -9,6 +9,9 @@ decisions behind the app).
 - macOS 14 (Sonoma) or later
 - Swift toolchain with the Swift Package Manager (`swift build`), from Xcode 16
   or the matching Command Line Tools
+- Xcode itself — installed and selected (`xcode-select -p`) — to run
+  `make bundle` / `make install`, which build universal (see below). The
+  Command Line Tools alone cover everything else, including `make check`.
 
 ## Install from source
 
@@ -18,10 +21,17 @@ From a clean checkout:
 make install
 ```
 
-This builds a release binary (`swift build -c release`), assembles a
-`Folium.app` bundle with its `Info.plist` and app icon, ad-hoc signs it so it launches
-without Gatekeeper complaints on the machine that built it, and copies it to
-`/Applications`.
+This builds a universal release binary (`swift build -c release --arch arm64
+--arch x86_64`, so one bundle runs natively on both Apple Silicon and Intel
+Macs), assembles a `Folium.app` bundle with its `Info.plist` and app icon,
+ad-hoc signs it so it launches without Gatekeeper complaints on the machine
+that built it, and copies it to `/Applications`.
+
+Only the packaged build is universal. `swift build` / `swift test` /
+`swift run` stay single-architecture, so the development loop doesn't pay for
+compiling everything twice. Asking for two architectures also hands the build
+to Xcode's build system, which is why the packaged build needs Xcode installed
+and selected — see [ADR 0002](docs/adr/0002-spm-build-system.md)'s amendment.
 
 Launch it from Spotlight, Launchpad, or:
 
