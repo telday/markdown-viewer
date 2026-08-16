@@ -87,15 +87,21 @@ contents into a Swift `String`.
 `make vendor` run at least once first**, since the vendored (not first-party)
 resource files won't exist yet.
 
-**`make bundle`/`make install` copy the SPM resource bundle into the `.app`
-*after* code-signing it**, not before: SPM's generated resource accessor
-looks for `Folium_Folium.bundle` as a sibling of the `.app` itself, but
-`codesign` refuses to seal a bundle with anything outside `Contents/` at its
-root. Signing first and adding the resource bundle after still produces a
-working app (verified by hiding every other fallback path and confirming it
-still launches and finds its resources) — `codesign --verify` will flag the
-added directory as unsealed, which only matters if this project ever moves
-beyond ad-hoc signing (see ADR 0003).
+**`make bundle`/`make install` copy both sets of files into
+`Contents/Resources/` before code-signing**, at the same relative paths SPM's
+generated bundle uses (`Resources/page.html`, `HighlightJS/…`), so the
+signature seals them: `ls` on the assembled `.app` shows `Contents` and
+nothing else, and `codesign --verify --strict` passes. The app finds them
+through its own `Bundle.main.resourceURL` (`MarkdownPage.resourceBaseURL`),
+which is why `Folium.app` runs correctly after being dragged to
+`/Applications` or onto a machine that never built it. The copy comes from the
+source tree rather than from SPM's generated bundle, so the `.app` doesn't
+inherit whichever name and layout the SPM build system in use produces.
+
+`Bundle.module` is the fallback, used only by `swift run`/`swift test`, which
+assemble no `.app`. Don't make it the primary: its accessor resolves the
+resource bundle as a sibling of the `.app`, which puts resources at the bundle
+root — where `codesign` refuses to seal them (see ADR 0003).
 
 **The app icon is committed as PNGs, not as an `.icns`.** `packaging/Folium.iconset/`
 holds the ten sizes macOS asks for and `packaging/Folium.svg` is the vector

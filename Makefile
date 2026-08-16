@@ -12,6 +12,7 @@ BUILD_DIR   := .build/$(CONFIG)
 # project directory, where Spotlight would index it as a second Folium app.
 APP_BUNDLE  := .build/$(APP_NAME).app
 CONTENTS    := $(APP_BUNDLE)/Contents
+SOURCE_DIR  := Sources/$(APP_NAME)
 INSTALL_DIR := /Applications
 INSTALLED   := $(INSTALL_DIR)/$(APP_NAME).app
 
@@ -78,21 +79,14 @@ bundle: build
 	iconutil --convert icns --output "$(CONTENTS)/Resources/$(APP_NAME).icns" \
 		packaging/$(APP_NAME).iconset
 	printf 'APPL????' > "$(CONTENTS)/PkgInfo"
+	# The page shell and its CSS/JS, at the paths MarkdownPage.resourceBaseURL
+	# resolves against. Taken from the source tree, not from the resource
+	# bundle the Swift Package Manager generates, so the .app doesn't inherit
+	# that bundle's name and layout. See ADR 0003's 2026-08-16 amendment.
+	cp -R "$(SOURCE_DIR)/Resources" "$(CONTENTS)/Resources/Resources"
+	cp -R "$(SOURCE_DIR)/Vendor/HighlightJS" "$(CONTENTS)/Resources/HighlightJS"
+	# Signing comes last: a signature seals the files present when it runs.
 	codesign --force --sign - --identifier "$(BUNDLE_ID)" "$(APP_BUNDLE)"
-	# SPM's generated Bundle.module accessor looks for the resource bundle as
-	# a sibling of the .app itself (Bundle.main.bundleURL), not inside
-	# Contents/Resources — its other fallback is a dev-machine-only absolute
-	# .build path, so skipping this silently produces an app that only
-	# happens to work on the machine it was built on and fatalErrors/crashes
-	# on launch anywhere else. Copied in *after* signing: codesign refuses to
-	# seal a bundle with anything outside Contents/ at its root ("unsealed
-	# contents present in the bundle root"), confirmed by testing both
-	# orders. Signing first and adding this after still launches correctly
-	# (verified by hiding the fallback .build path entirely and confirming
-	# the app still finds its resources); `codesign --verify` will flag the
-	# added directory as unsealed, which only matters if this ever moves
-	# beyond ad-hoc signing (see ADR 0003).
-	cp -R "$(BUILD_DIR)/$(APP_NAME)_$(APP_NAME).bundle" "$(APP_BUNDLE)/$(APP_NAME)_$(APP_NAME).bundle"
 	@echo "Built $(APP_BUNDLE)"
 
 ## Install the bundle to /Applications.
