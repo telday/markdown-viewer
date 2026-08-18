@@ -16,8 +16,10 @@
     <string>Folium</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
+    <!-- Placeholders: the Makefile's `bundle` target stamps both keys into its
+         copy of this file. -->
     <key>CFBundleShortVersionString</key>
-    <string>0.1.0</string>
+    <string>0.0.0-dev</string>
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>CFBundleInfoDictionaryVersion</key>

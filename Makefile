@@ -7,6 +7,24 @@
 APP_NAME    := Folium
 BUNDLE_ID   := com.telday.Folium
 CONFIG      := release
+# The version a user sees in Finder's Get Info and in the About box. Pass it
+# on the command line (`make bundle VERSION=1.2.0`) or from the environment.
+# The default is stamped like any other value, so a plain `make install`
+# exercises the same path a tagged release build takes.
+#
+# `override` with `$(or ...)`, rather than `?=`, because a variable set to the
+# empty string counts as set: `VERSION= make bundle` — the shape a CI template
+# produces when its input is blank — would otherwise stamp an empty version.
+# A non-empty value from the command line still wins, since it is what
+# `$(VERSION)` expands to here.
+override VERSION  := $(or $(strip $(VERSION)),0.0.0-dev)
+# macOS compares CFBundleVersion — the build number — between two copies of
+# the same app, so it has to grow. The commit count grows with every commit,
+# and unlike a timestamp it is the same for everyone building a given commit.
+# Counting needs the whole history; a shallow clone has none, which the bundle
+# recipe warns about.
+override BUILD_NUM := $(or $(strip $(BUILD_NUM)), \
+                           $(shell git rev-list --count HEAD 2>/dev/null),1)
 # Universal, so one bundle runs natively on Apple Silicon and on Intel rather
 # than under Rosetta on one of them. Asking for a second architecture hands
 # the build to Xcode's build system, which needs Xcode itself installed and
@@ -83,6 +101,14 @@ bundle: build
 	mkdir -p "$(CONTENTS)/MacOS" "$(CONTENTS)/Resources"
 	cp "$(BUILD_DIR)/$(APP_NAME)" "$(CONTENTS)/MacOS/$(APP_NAME)"
 	cp packaging/Info.plist "$(CONTENTS)/Info.plist"
+	# The version goes into the copy, never into packaging/Info.plist, so a
+	# build leaves the checkout alone. plutil ships with macOS and edits a
+	# plist in place.
+	plutil -replace CFBundleShortVersionString -string "$(VERSION)" "$(CONTENTS)/Info.plist"
+	plutil -replace CFBundleVersion -string "$(BUILD_NUM)" "$(CONTENTS)/Info.plist"
+	@[ "$$(git rev-parse --is-shallow-repository 2>/dev/null)" = true ] && \
+		echo "warning: shallow clone — CFBundleVersion is $(BUILD_NUM) for every build; pass BUILD_NUM=" \
+		|| true
 	# The Finder/Dock icon. `.icns` is a multi-resolution container, and
 	# iconutil is the only supported way to produce one — it packs the ten
 	# PNGs whose names encode the sizes macOS asks for (16pt through 512pt,
