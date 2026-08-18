@@ -15,6 +15,10 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The bundle step derives CFBundleVersion from the commit count,
+          # which a shallow checkout cannot count.
+          fetch-depth: 0
 
       # Package.swift is swift-tools-version 6.0, which needs Xcode 16+.
       # Select the newest Xcode present rather than hard-coding a point version.
@@ -39,3 +43,8 @@ jobs:
       # Runs lint, vet, unit tests, integration tests, and the coverage gate.
       - name: make check
         run: make check
+
+      # The shippability gate: assemble the real universal, ad-hoc-signed
+      # bundle and assert its finished shape. See scripts/verify-bundle.sh.
+      - name: make bundle && make verify-bundle
+        run: make bundle && make verify-bundle

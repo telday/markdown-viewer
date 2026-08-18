@@ -46,7 +46,7 @@ SOURCE_DIR  := Sources/$(APP_NAME)
 INSTALL_DIR := /Applications
 INSTALLED   := $(INSTALL_DIR)/$(APP_NAME).app
 
-.PHONY: all build bundle install uninstall clean vendor \
+.PHONY: all build bundle verify-bundle install uninstall clean vendor \
         check lint vet test test-unit test-integration coverage
 
 all: bundle
@@ -126,6 +126,12 @@ bundle: build
 	# Signing comes last: a signature seals the files present when it runs.
 	codesign --force --sign - --identifier "$(BUNDLE_ID)" "$(APP_BUNDLE)"
 	@echo "Built $(APP_BUNDLE)"
+
+## Verify that the assembled $(APP_BUNDLE) is shippable: resources present,
+## bundle root clean, signature valid, universal, stamped with $(VERSION).
+## Builds nothing — run `make bundle` first. See scripts/verify-bundle.sh.
+verify-bundle:
+	./scripts/verify-bundle.sh "$(APP_BUNDLE)" "$(VERSION)"
 
 ## Install the bundle to /Applications.
 install: bundle

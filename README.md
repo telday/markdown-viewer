@@ -63,6 +63,8 @@ build from a full clone — in a shallow one every build gets the same number, a
 
 - `make bundle` — build and assemble `Folium.app` under `.build/` without
   installing.
+- `make verify-bundle` — check that the assembled bundle is shippable (see
+  [below](#the-shippability-gate)).
 - `make uninstall` — remove `/Applications/Folium.app`.
 - `make clean` — remove build artifacts and the local bundle.
 
@@ -153,3 +155,36 @@ code change (see [`docs/agents/definition-of-done.md`](docs/agents/definition-of
   (UI/host-glue files are excluded and listed on every run).
 
 CI runs `make check` on every pull request (`.github/workflows/ci.yml`).
+
+### The shippability gate
+
+`make check` says the *code* is good. `make verify-bundle` says the *artifact*
+is: it takes an assembled bundle and asserts what a user (and, eventually,
+Apple's notary service) would see.
+
+```sh
+make bundle && make verify-bundle
+# or against a bundle stamped with a specific version:
+make bundle verify-bundle VERSION=1.2.0
+```
+
+It checks that every first-party and vendored asset is at the path the app
+resolves it from, that **nothing sits at the bundle root except `Contents/`**
+(codesign refuses to seal files there, so anything else ships unsigned),
+that `codesign --verify --strict --deep` passes, that the executable carries
+both `arm64` and `x86_64`, and that the `Info.plist` claims the identifier,
+executable, document type, and version it should. It prints each check and
+stops at the first failure. Assertions that need a Developer ID — hardened
+runtime, notarization — are skipped on an ad-hoc signature, so the gate is
+useful on a contributor's machine today (see
+[issue #31](https://github.com/telday/markdown-viewer/issues/31)).
+
+It builds nothing: run `make bundle` first. Verifying a bundle older than
+`Sources/`, `packaging/`, or the `Makefile` fails rather than reporting on a
+stale artifact. Pointed at a bundle from outside the checkout — `/Applications`,
+a downloaded release — it skips the two checks that compare against this
+checkout's sources and verifies the artifact on its own contents.
+
+**It is deliberately not part of `make check`**, which stays the fast
+code-change loop and never builds a release bundle. CI runs
+`make bundle && make verify-bundle` as its own step on every pull request.
