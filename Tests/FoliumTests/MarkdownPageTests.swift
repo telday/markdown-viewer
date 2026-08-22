@@ -48,6 +48,51 @@ struct MarkdownPageTests {
         #expect(shell.contains(#"<meta name="color-scheme" content="light dark">"#))
     }
 
+    @Test func shellDeclaresACSPThatEnforcesTheNoNetworkFloor() throws {
+        let shell = try String(contentsOf: MarkdownPage.pageURL, encoding: .utf8)
+
+        let openTag = #"<meta http-equiv="Content-Security-Policy" content=""#
+        guard let cspOpen = shell.range(of: openTag),
+              let cspClose = shell.range(of: "\">", range: cspOpen.upperBound..<shell.endIndex) else {
+            Issue.record("No CSP meta tag found in page.html")
+            return
+        }
+        // Isolated to just the directive string, not the whole file: the
+        // surrounding doc comment quotes CSP fragments like `img-src 'self'`
+        // by name while explaining why they were rejected, and a whole-file
+        // substring check would trip over its own explanation.
+        let cspContent = String(shell[cspOpen.upperBound..<cspClose.lowerBound])
+
+        // Every asset tag must load under a policy that's already in force —
+        // a CSP appended after them would leave a window where nothing polices
+        // the very tags issue #17 exists to police.
+        let firstAssetTag = shell.range(of: "<link rel=\"stylesheet\"")
+        #expect(firstAssetTag.map { cspOpen.lowerBound < $0.lowerBound } == true)
+
+        // `img-src 'none'`, not `'self'` — see the comment in page.html:
+        // measured directly against ContentSecurityPolicyTests, `'self'` was
+        // found not to restrict a remote `<img>` on a `file://` document at
+        // all here, unlike script-src/style-src's 'self'. `'none'` was
+        // confirmed to actually block it, at the cost of also blocking local
+        // images — a cost this app doesn't pay for anything yet, since it
+        // has no `<img>` tags of its own and no document-relative image
+        // feature (that's issue #18).
+        let directives = [
+            "default-src 'none'",
+            "script-src 'self'",
+            "style-src 'self'",
+            "img-src 'none'",
+            "font-src 'self'",
+            "media-src 'self'",
+            "base-uri 'none'",
+            "form-action 'none'"
+        ]
+        for directive in directives {
+            #expect(cspContent.contains(directive), "missing CSP directive: \(directive)")
+        }
+        #expect(!cspContent.contains("img-src 'self'"))
+    }
+
     // MARK: - renderBodyScript
 
     @Test func rendersToAFoliumRenderBodyCall() {
@@ -110,5 +155,24 @@ struct MarkdownPageTests {
         // Native capture, not a page-side listener — also an acceptance
         // criterion, and cheap to regress by "just adding a listener here".
         #expect(!scrollJS.contains("addEventListener"))
+    }
+
+    // MARK: - scrollToAnchorScript
+
+    @Test func rendersToAFoliumScrollToAnchorCall() {
+        let script = MarkdownPage.scrollToAnchorScript("usage")
+
+        #expect(script == #"window.FoliumScrollToAnchor("usage")"#)
+    }
+
+    @Test func safelyEscapesAFragmentContainingQuotesAndBackslashesForJSInjection() {
+        // The fragment comes straight off a URL in rendered document content,
+        // so it's attacker-controlled the same way renderBodyScript's HTML
+        // is — an unescaped quote or backslash must not be able to break out
+        // of the JS string literal it's injected into.
+        let script = MarkdownPage.scrollToAnchorScript(#"a"b\c"#)
+
+        #expect(script.contains(#"a\"b\\c"#))
+        #expect(!script.contains(#""a"b\c""#))
     }
 }

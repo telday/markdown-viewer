@@ -4,6 +4,35 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
+<!--
+  Enforces CONTEXT.md's no-network floor: Folium originates no network
+  request, by policy engine rather than convention. Three directives are not
+  the obvious choice:
+  - `script-src`/`style-src 'self'`, not `'self' file:` — WKWebView treats
+    `file:` as a source expression rather than a synonym for the page's own
+    `file://` origin, and it blocks this page's own local assets outright
+    (verified: the page renders unstyled with no highlighting). `'self'`
+    alone already covers file:// siblings under loadFileURL's read-access
+    grant.
+  - `img-src 'none'`, not `'self'` — measured directly against a real
+    WKWebView (this app's actual test target, not just a browser tab): with
+    `img-src 'self'`, a remotely hosted `<img>` on this `file://` page still
+    loaded successfully, across several unrelated hosts and with the
+    remote-content cache disabled to rule out a cached response. `'self'`
+    does not restrict fetch directives on a `file://` document origin here,
+    the way it does for `script-src`/`style-src` above. `'none'` was
+    confirmed to actually block the load. There is no current feature that
+    needs an `<img>` to load at all — the app's own CSS/JS assets are
+    `<link>`/`<script src>`, never `<img>` — so this costs nothing today.
+    Issue #18 (document-relative images) must re-measure this directive
+    against whatever new read-access grant it adds, rather than assuming
+    `'self'` is safe to widen back to.
+  - `base-uri 'none'` — issue #18 rewrites relative document-relative URLs
+    in Swift rather than injecting a <base> tag; leave this here so that
+    approach can't quietly regress to the tag-based one.
+  Placed before the asset tags below so nothing in <head> loads unpoliced.
+-->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'none'; font-src 'self'; media-src 'self'; base-uri 'none'; form-action 'none';">
 <link rel="stylesheet" href="github.css">
 <link rel="stylesheet" href="../HighlightJS/styles/github.min.css" media="(prefers-color-scheme: light)">
 <link rel="stylesheet" href="../HighlightJS/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">

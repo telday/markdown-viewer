@@ -93,4 +93,20 @@ enum MarkdownPage {
         let lines = direction == .downward ? scrollLinesPerPress : -scrollLinesPerPress
         return "window.FoliumScrollBy(\(lines))"
     }
+
+    /// Builds the `evaluateJavaScript` call for a `NavigationDecision
+    /// .scrollToAnchor` result, via `window.FoliumScrollToAnchor` — defined
+    /// by `Resources/scroll.js`.
+    ///
+    /// The fragment comes from a URL in the rendered document, so it is
+    /// attacker-controlled text the same way `renderBodyScript`'s body HTML
+    /// is: JSON-encoding it, rather than interpolating it into the script
+    /// string directly, is what keeps a fragment like `");window.x=1;("`
+    /// from breaking out of the string literal it's injected into.
+    static func scrollToAnchorScript(_ fragment: String) -> String {
+        let failure = "Failed to JSON-encode an anchor fragment for JS injection."
+        guard let json = try? JSONEncoder().encode(fragment) else { fatalError(failure) }
+        guard let jsString = String(data: json, encoding: .utf8) else { fatalError(failure) }
+        return "window.FoliumScrollToAnchor(\(jsString))"
+    }
 }
