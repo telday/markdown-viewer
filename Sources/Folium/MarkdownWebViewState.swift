@@ -12,6 +12,8 @@
 final class MarkdownWebViewState {
     private var isShellLoaded = false
     private var pendingBodyHTML: String?
+    private var hasEmittedFirstPaint = false
+    var benchMarker: BenchMarker = BenchMarker()
 
     /// Call when the shell's one-time `WKNavigationDelegate` `didFinish`
     /// fires. Returns body content to render immediately if one arrived
@@ -31,6 +33,7 @@ final class MarkdownWebViewState {
             pendingBodyHTML = bodyHTML
             return nil
         }
+        if !hasEmittedFirstPaint { benchMarker.mark("first-paint"); hasEmittedFirstPaint = true }
         return bodyHTML
     }
 }

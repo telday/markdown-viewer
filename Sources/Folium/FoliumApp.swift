@@ -1,5 +1,11 @@
 import SwiftUI
 
+private let benchMarkerLaunch: BenchMarker = {
+    let marker = BenchMarker()
+    marker.mark("launch")
+    return marker
+}()
+
 @main
 struct FoliumApp: App {
     // Turns on document/window state restoration, which SwiftUI's own app

@@ -1,6 +1,8 @@
 import Combine
 import Foundation
 
+private let benchMarker = BenchMarker()
+
 /// One open document's body HTML, kept in step with the file on disk
 /// (issue #7).
 ///
@@ -33,7 +35,9 @@ final class LiveDocument: ObservableObject {
         scheduler: any ReloadScheduler = SleepingReloadScheduler()
     ) {
         self.fileURL = fileURL
+        benchMarker.mark("render-start")
         bodyHTML = MarkdownRenderer.renderHTML(from: text)
+        benchMarker.mark("render-end")
 
         guard let fileURL else { return }
         coalescer = ReloadCoalescer(scheduler: scheduler) { [weak self] in
@@ -66,10 +70,13 @@ final class LiveDocument: ObservableObject {
         guard let fileURL, let data = try? Data(contentsOf: fileURL) else { return }
         guard let text = try? MarkdownLoading.text(fromUTF8: data) else { return }
 
+        benchMarker.mark("render-start")
         let rendered = MarkdownRenderer.renderHTML(from: text)
+        benchMarker.mark("render-end")
         // `touch`, chmod, or a save of unchanged bytes: no publish, no
         // injection into the web view, no repaint.
         guard rendered != bodyHTML else { return }
         bodyHTML = rendered
+        benchMarker.mark("reload-paint")
     }
 }

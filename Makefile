@@ -47,7 +47,7 @@ INSTALL_DIR := /Applications
 INSTALLED   := $(INSTALL_DIR)/$(APP_NAME).app
 
 .PHONY: all build bundle verify-bundle install uninstall clean vendor \
-        check lint vet test test-unit test-integration coverage
+        check lint vet test test-unit test-integration coverage bench
 
 all: bundle
 
@@ -132,6 +132,16 @@ bundle: build
 ## Builds nothing — run `make bundle` first. See scripts/verify-bundle.sh.
 verify-bundle:
 	./scripts/verify-bundle.sh "$(APP_BUNDLE)" "$(VERSION)"
+
+## Measure and report latency budgets: cold launch, live-reload, Markdown render.
+## Generates a deterministic ~500 KB fixture, runs the built binary with FOLIUM_BENCH,
+## and prints measured vs budgeted latency. Exits 0 regardless; CI records the numbers
+## as an informational trend, not a gate. See issue #21.
+bench: build .build/bench/fixture.md
+	FOLIUM_BENCH=1 ./scripts/bench.sh .build/bench/fixture.md "$(BUILD_DIR)/$(APP_NAME)"
+
+.build/bench/fixture.md:
+	./scripts/make-bench-fixture.sh
 
 ## Install the bundle to /Applications.
 install: bundle
