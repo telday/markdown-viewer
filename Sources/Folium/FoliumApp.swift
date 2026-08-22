@@ -64,16 +64,16 @@ private struct DocumentView: View {
             scrollKeys: scrollKeys.bindings,
             remoteContentAllowed: remoteContent.isAllowed
         )
-        // `initial: true` so a document that already has blocked content on
-        // its very first render shows the bar immediately, not only after
-        // its next live reload — `onChange` alone only fires on a value
-        // that changes, and the first render is the value arriving, not
-        // changing.
-        .onChange(of: document.bodyHTML, initial: true) { _, newBodyHTML in
+        // No `initial: true`: `hasBlockedContent` for the very first render
+        // is already computed by `RemoteContentState.init(bodyHTML:)` above,
+        // from this same `document.bodyHTML`. Firing here too on the initial
+        // appearance would scan every document's body twice for no different
+        // answer — this only needs to run for the reloads after that.
+        .onChange(of: document.bodyHTML) { _, newBodyHTML in
             remoteContent.render(bodyHTML: newBodyHTML)
         }
         .safeAreaInset(edge: .top) {
-            if remoteContent.hasBlockedContent && !remoteContent.isAllowed {
+            if remoteContent.shouldPromptToLoad {
                 RemoteContentBar(onLoad: remoteContent.allow)
             }
         }

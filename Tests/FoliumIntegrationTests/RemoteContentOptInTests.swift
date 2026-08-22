@@ -26,7 +26,10 @@ struct RemoteContentOptInTests {
     // MARK: - Blocked by default (the strict shell, unchanged from #17)
 
     @Test func remoteImageIsBlockedByDefaultUnderTheStrictShell() async throws {
-        let (webView, waiter) = try await loadedWebView(shellURL: MarkdownPage.pageURL, remoteContentAllowed: false)
+        let (webView, waiter) = try await loadedWebView(
+            shellURL: MarkdownPage.strictPageURL,
+            remoteContentAllowed: false
+        )
         defer { webView.window?.close() }
         _ = waiter // kept alive: `navigationDelegate` is a weak reference
 
@@ -82,6 +85,55 @@ struct RemoteContentOptInTests {
 
         let recorded = try #require(violation, "http: must stay blocked after opt-in — only https: is ever unblocked")
         #expect(recorded["directive"] as? String == "img-src")
+    }
+
+    // MARK: - media-src (video), not just img-src — issue #19 relaxes both
+
+    @Test func remoteVideoIsBlockedByDefaultUnderTheStrictShell() async throws {
+        let (webView, waiter) = try await loadedWebView(
+            shellURL: MarkdownPage.strictPageURL,
+            remoteContentAllowed: false
+        )
+        defer { webView.window?.close() }
+        _ = waiter // kept alive: `navigationDelegate` is a weak reference
+
+        let violation = try await recordFirstCSPViolation(
+            on: webView,
+            injectingIntoMarkdownContent: #"<video id="remote-video" src="https://example.invalid/movie.mp4"></video>"#
+        )
+
+        let recorded = try #require(
+            violation,
+            "no securitypolicyviolation fired for a remote <video src> under the strict shell"
+        )
+        // WebKit reports an element's own media fetch under the more
+        // specific "media-src-elem" sub-directive, the same pattern
+        // ContentSecurityPolicyTests sees for a <link rel="stylesheet"> and
+        // "style-src-elem".
+        #expect((recorded["directive"] as? String)?.hasPrefix("media-src") == true)
+        #expect((recorded["blockedURI"] as? String)?.contains("example.invalid") == true)
+    }
+
+    @Test func remoteVideoRecordsNoViolationUnderTheOptInShell() async throws {
+        let (webView, waiter) = try await loadedWebView(
+            shellURL: MarkdownPage.remotePageURL,
+            remoteContentAllowed: true
+        )
+        defer { webView.window?.close() }
+        _ = waiter // kept alive: `navigationDelegate` is a weak reference
+
+        let violation = try await recordFirstCSPViolation(
+            on: webView,
+            injectingIntoMarkdownContent: #"<video id="remote-video" src="https://example.invalid/movie.mp4"></video>"#
+        )
+
+        // `media-src` is asserted against the raw CSP string in
+        // MarkdownPageTests, but nothing before this exercised it in a real
+        // WKWebView: the img-src tests above don't touch it, and a `poster`
+        // attribute — the other thing `RemoteContent` scans — is fetched
+        // under `img-src` per the CSP spec, not `media-src`. Only an actual
+        // `<video src>` proves this directive specifically was relaxed.
+        #expect(violation == nil)
     }
 
     // MARK: - Positive control: local file: images still load, under both shells
@@ -211,7 +263,7 @@ struct RemoteContentOptInTests {
 /// `ContentSecurityPolicyTests.NavigationWaiter` — needed again here
 /// because that one is file-private, and this file loads a temp-directory
 /// copy of the shell, which the real `Coordinator`'s `decidePolicyFor`
-/// (comparing against `MarkdownPage.pageURL`/`remotePageURL` specifically)
+/// (comparing against `MarkdownPage.strictPageURL`/`remotePageURL` specifically)
 /// would reject every navigation into, including the page's own initial
 /// load.
 @MainActor

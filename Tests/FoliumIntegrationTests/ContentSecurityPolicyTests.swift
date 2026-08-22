@@ -46,7 +46,7 @@ struct ContentSecurityPolicyTests {
         let tempRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: tempRoot) }
-        let shellHTML = try String(contentsOf: MarkdownPage.pageURL, encoding: .utf8)
+        let shellHTML = try String(contentsOf: MarkdownPage.strictPageURL, encoding: .utf8)
         try shellHTML.write(to: tempRoot.appendingPathComponent("page.html"), atomically: true, encoding: .utf8)
         try Self.onePixelPNG.write(to: tempRoot.appendingPathComponent("local.png"))
 
@@ -160,7 +160,7 @@ struct ContentSecurityPolicyTests {
         #expect(await waitUntil { recorder.openedURLs.count == 1 })
         #expect(recorder.openedURLs == [URL(string: "https://example.com/page")!])
         // The click cancelled navigation, so the web view never left the shell.
-        #expect(webView.url?.path == MarkdownPage.pageURL.path)
+        #expect(webView.url?.path == MarkdownPage.strictPageURL.path)
     }
 
     @Test func inDocumentAnchorLinkScrollsInsteadOfNavigating() async throws {
@@ -196,7 +196,7 @@ struct ContentSecurityPolicyTests {
         // that's what a regression back to default handling would show up
         // in. `MarkdownWebView.Coordinator` cancels the navigation before it
         // ever reaches the URL bar, so the fragment must never appear.
-        #expect(webView.url?.path == MarkdownPage.pageURL.path)
+        #expect(webView.url?.path == MarkdownPage.strictPageURL.path)
         #expect(webView.url?.fragment == nil)
     }
 
@@ -221,7 +221,7 @@ struct ContentSecurityPolicyTests {
         let coordinator = MarkdownWebView.Coordinator(openExternal: { url in recorder.record(url) })
         let waiter = CoordinatorWaiter(coordinator: coordinator)
         webView.navigationDelegate = waiter
-        webView.loadFileURL(MarkdownPage.pageURL, allowingReadAccessTo: MarkdownPage.resourceBaseURL)
+        webView.loadFileURL(MarkdownPage.strictPageURL, allowingReadAccessTo: MarkdownPage.resourceBaseURL)
         await waiter.waitUntilFinished()
 
         let window = NSWindow(
@@ -297,7 +297,7 @@ struct ContentSecurityPolicyTests {
 /// with no `decidePolicyFor` override — used only where a test needs a page
 /// to finish loading and has no interest in navigation policy. (Reusing
 /// `CoordinatorWaiter` for that would run the real `Coordinator`, whose
-/// `decidePolicyFor` compares against `MarkdownPage.pageURL` specifically —
+/// `decidePolicyFor` compares against `MarkdownPage.strictPageURL` specifically —
 /// wrong shell URL for a temp-directory copy of the page, and every
 /// navigation, including the page's own initial load, would come back
 /// `.block`.)

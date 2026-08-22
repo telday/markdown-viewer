@@ -66,4 +66,30 @@ struct RemoteContentStateTests {
         state.allow()
         #expect(state.isAllowed)
     }
+
+    // MARK: - shouldPromptToLoad — the "Load" bar's own visibility rule
+
+    @Test func doesNotPromptWhenNothingIsBlocked() {
+        let state = RemoteContentState(bodyHTML: "<p>no images</p>")
+        #expect(!state.shouldPromptToLoad)
+    }
+
+    @Test func promptsWhenContentIsBlockedAndNotYetAllowed() {
+        let state = RemoteContentState(bodyHTML: #"<img src="https://example.com/badge.png">"#)
+        #expect(state.shouldPromptToLoad)
+    }
+
+    @Test func stopsPromptingOnceAllowed() {
+        let state = RemoteContentState(bodyHTML: #"<img src="https://example.com/badge.png">"#)
+        #expect(state.shouldPromptToLoad)
+
+        state.allow()
+        #expect(!state.shouldPromptToLoad)
+    }
+
+    @Test func doesNotPromptWhenAlreadyAllowedEvenIfNothingWasEverBlocked() {
+        let state = RemoteContentState()
+        state.allow()
+        #expect(!state.shouldPromptToLoad)
+    }
 }

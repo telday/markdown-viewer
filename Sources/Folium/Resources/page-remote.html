@@ -5,23 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <!--
-  Enforces CONTEXT.md's no-network floor: Folium originates no network
-  request, by policy engine rather than convention. No directive here uses
-  `'self'`: measured against this exact shell, `'self'` matched this page's
-  own `file://` origin loosely enough that a cross-origin remote image or
-  stylesheet still loaded — CSP's `'self'` keyword did not fence off a
-  remote scheme the way it would on a page actually served over the network.
-  The unquoted scheme-source `file:` (not the quoted string `'file:'`, which
-  is a different, invalid expression that matches nothing) restricts every
-  directive to `file://` URLs specifically, and still permits this page's
-  own local assets under loadFileURL's read-access grant. Verified in
-  `ContentSecurityPolicyTests.swift`: a remote image and a remote stylesheet
-  link are both blocked, with a `securitypolicyviolation` recorded for each,
-  while the bundled highlight.js and both local stylesheets still load.
-  `base-uri 'none'` is separately deliberate — issue #18 rewrites relative
-  document-relative URLs in Swift rather than injecting a <base> tag; leave
-  this here so that approach can't quietly regress to the tag-based one.
-  Placed before the asset tags below so nothing in <head> loads unpoliced.
+  The relaxed shell for the per-document remote-content opt-in (issue #19).
+  `MarkdownWebView` loads this instead of page.html once a document's "Load
+  remote images" bar is clicked — a <meta> CSP can only be set as the page
+  parses, so admitting https: means loading a different file, not mutating
+  this one. `http:` still isn't admitted anywhere below: only `https:`, and
+  only for img-src/media-src, which is all a document's remote images and
+  video need. Every other directive, and every asset tag, is byte-identical
+  to page.html's — see that file's header comment for why none of them use
+  `'self'` — and MarkdownPageTests.theTwoShellsDifferOnlyInTheCSPMetaLine
+  checks that stays true. That comment is deliberately not this one:
+  page.html's explains page.html's own (fully blocking) CSP, which would be
+  false written here.
 -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src file:; style-src file:; img-src file: https:; font-src file:; media-src file: https:; base-uri 'none'; form-action 'none';">
 <link rel="stylesheet" href="github.css">

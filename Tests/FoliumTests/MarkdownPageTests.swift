@@ -16,24 +16,24 @@ struct MarkdownPageTests {
         #expect(MarkdownPage.resourceBaseURL.lastPathComponent.hasSuffix(".bundle"))
     }
 
-    @Test func pageURLPointsAtTheRealShellFile() {
-        #expect(MarkdownPage.pageURL.lastPathComponent == "page.html")
-        #expect(FileManager.default.fileExists(atPath: MarkdownPage.pageURL.path))
+    @Test func strictPageURLPointsAtTheRealShellFile() {
+        #expect(MarkdownPage.strictPageURL.lastPathComponent == "page.html")
+        #expect(FileManager.default.fileExists(atPath: MarkdownPage.strictPageURL.path))
     }
 
-    // MARK: - pageURL(remoteContentAllowed:) — issue #19
+    // MARK: - shellURL(remoteContentAllowed:) — issue #19
 
     @Test func remotePageURLPointsAtTheRealOptInShellFile() {
         #expect(MarkdownPage.remotePageURL.lastPathComponent == "page-remote.html")
         #expect(FileManager.default.fileExists(atPath: MarkdownPage.remotePageURL.path))
     }
 
-    @Test func pageURLSelectionStaysStrictByDefault() {
-        #expect(MarkdownPage.pageURL(remoteContentAllowed: false) == MarkdownPage.pageURL)
+    @Test func shellURLSelectionStaysStrictByDefault() {
+        #expect(MarkdownPage.shellURL(remoteContentAllowed: false) == MarkdownPage.strictPageURL)
     }
 
-    @Test func pageURLSelectionSwitchesToTheOptInShellWhenAllowed() {
-        #expect(MarkdownPage.pageURL(remoteContentAllowed: true) == MarkdownPage.remotePageURL)
+    @Test func shellURLSelectionSwitchesToTheOptInShellWhenAllowed() {
+        #expect(MarkdownPage.shellURL(remoteContentAllowed: true) == MarkdownPage.remotePageURL)
     }
 
     // MARK: - Shell drift guard — issue #19
@@ -44,16 +44,33 @@ struct MarkdownPageTests {
         // test that makes that acceptable: any edit to page.html that isn't
         // mirrored into page-remote.html (or vice versa) fails here, in
         // something more precise than "the diff looked large."
-        let strictLines = try String(contentsOf: MarkdownPage.pageURL, encoding: .utf8)
+        let strictLines = try String(contentsOf: MarkdownPage.strictPageURL, encoding: .utf8)
             .components(separatedBy: .newlines)
         let remoteLines = try String(contentsOf: MarkdownPage.remotePageURL, encoding: .utf8)
             .components(separatedBy: .newlines)
 
-        #expect(strictLines.count == remoteLines.count)
-
         let cspPrefix = #"<meta http-equiv="Content-Security-Policy""#
+
+        // The header <!-- ... --> comment above the CSP meta tag is not part
+        // of this comparison: it explains *that* shell's own policy, so its
+        // wording is only accurate on the file it's written on and is
+        // expected to differ between the two — see page-remote.html's own
+        // comment for why it isn't page.html's, word for word. What this
+        // guard actually protects starts at the CSP meta line: every other
+        // directive, and every asset tag below it, has to stay identical.
+        let strictCSPIndex = try #require(
+            strictLines.firstIndex { $0.hasPrefix(cspPrefix) }, "no CSP meta line found in page.html"
+        )
+        let remoteCSPIndex = try #require(
+            remoteLines.firstIndex { $0.hasPrefix(cspPrefix) }, "no CSP meta line found in page-remote.html"
+        )
+        let strictTail = strictLines[strictCSPIndex...]
+        let remoteTail = remoteLines[remoteCSPIndex...]
+
+        #expect(strictTail.count == remoteTail.count)
+
         var sawCSPLineDiffer = false
-        for (strictLine, remoteLine) in zip(strictLines, remoteLines) where strictLine != remoteLine {
+        for (strictLine, remoteLine) in zip(strictTail, remoteTail) where strictLine != remoteLine {
             let bothAreCSPLines = strictLine.hasPrefix(cspPrefix) && remoteLine.hasPrefix(cspPrefix)
             #expect(bothAreCSPLines, "unexpected drift outside the CSP line: \(strictLine) vs \(remoteLine)")
             sawCSPLineDiffer = true
@@ -96,7 +113,7 @@ struct MarkdownPageTests {
     }
 
     @Test func shellReferencesEveryAssetByURLWithNoCDNReference() throws {
-        let shell = try String(contentsOf: MarkdownPage.pageURL, encoding: .utf8)
+        let shell = try String(contentsOf: MarkdownPage.strictPageURL, encoding: .utf8)
 
         #expect(shell.contains(#"<link rel="stylesheet" href="github.css">"#))
         #expect(shell.contains(#"href="../HighlightJS/styles/github.min.css" media="(prefers-color-scheme: light)""#))
@@ -117,13 +134,13 @@ struct MarkdownPageTests {
     }
 
     @Test func shellDeclaresSystemColorScheme() throws {
-        let shell = try String(contentsOf: MarkdownPage.pageURL, encoding: .utf8)
+        let shell = try String(contentsOf: MarkdownPage.strictPageURL, encoding: .utf8)
         // WKWebView needs this to report the system light/dark setting.
         #expect(shell.contains(#"<meta name="color-scheme" content="light dark">"#))
     }
 
     @Test func shellDeclaresACSPThatEnforcesTheNoNetworkFloor() throws {
-        let shell = try String(contentsOf: MarkdownPage.pageURL, encoding: .utf8)
+        let shell = try String(contentsOf: MarkdownPage.strictPageURL, encoding: .utf8)
 
         let openTag = #"<meta http-equiv="Content-Security-Policy" content=""#
         guard let cspOpen = shell.range(of: openTag),

@@ -116,7 +116,7 @@ struct ScrollKeyTests {
         let webView = ScrollKeyWebView(frame: NSRect(x: 0, y: 0, width: 800, height: 400))
         let waiter = NavigationWaiter()
         webView.navigationDelegate = waiter
-        webView.loadFileURL(MarkdownPage.pageURL, allowingReadAccessTo: MarkdownPage.resourceBaseURL)
+        webView.loadFileURL(MarkdownPage.strictPageURL, allowingReadAccessTo: MarkdownPage.resourceBaseURL)
         await waiter.waitUntilFinished()
 
         // Long enough that there is somewhere to scroll to.

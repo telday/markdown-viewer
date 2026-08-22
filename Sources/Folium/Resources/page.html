@@ -22,6 +22,9 @@
   document-relative URLs in Swift rather than injecting a <base> tag; leave
   this here so that approach can't quietly regress to the tag-based one.
   Placed before the asset tags below so nothing in <head> loads unpoliced.
+  page-remote.html is this shell's sibling: identical below the CSP meta
+  line, with a deliberately different header comment of its own explaining
+  its relaxed policy (issue #19) — see it for why they aren't the same text.
 -->
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src file:; style-src file:; img-src file:; font-src file:; media-src file:; base-uri 'none'; form-action 'none';">
 <link rel="stylesheet" href="github.css">

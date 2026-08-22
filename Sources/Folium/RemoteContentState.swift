@@ -28,6 +28,15 @@ final class RemoteContentState: ObservableObject {
     /// lifetime of this object — see `allow()`.
     @Published private(set) var isAllowed = false
 
+    /// Whether `DocumentView`'s "Load remote images" bar should be on
+    /// screen. Kept here rather than as an inline condition in
+    /// `FoliumApp.swift` — coverage-excluded host glue — because it is a
+    /// branching rule on this type's own state, and this file is not
+    /// excluded: keeping it here is what makes it unit-testable at all.
+    var shouldPromptToLoad: Bool {
+        hasBlockedContent && !isAllowed
+    }
+
     /// - Parameter bodyHTML: the document's rendered body at the time this
     ///   state is created, so the initial bar visibility is correct on first
     ///   render rather than only from the next one.

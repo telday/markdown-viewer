@@ -58,12 +58,10 @@ enum MarkdownPage {
         return Bundle.module.bundleURL
     }()
 
-    /// The static page shell `MarkdownWebView` loads once via `loadFileURL`.
-    /// This is the strict shell — CSP blocks every `http:`/`https:` load.
-    /// Kept as its own constant, rather than folded into
-    /// `pageURL(remoteContentAllowed:)` below, so #17's and #18's existing
-    /// tests keep compiling unchanged.
-    static let pageURL = resourceBaseURL.appendingPathComponent(pageRelativePath)
+    /// The static page shell `MarkdownWebView` loads once via `loadFileURL`
+    /// for a document that has not opted in to remote content. CSP blocks
+    /// every `http:`/`https:` load here.
+    static let strictPageURL = resourceBaseURL.appendingPathComponent(pageRelativePath)
 
     /// Where the opt-in shell sits, alongside `page.html` (issue #19).
     static let remotePageRelativePath = "Resources/page-remote.html"
@@ -80,8 +78,8 @@ enum MarkdownPage {
     /// remote-content opt-in (issue #19) is in effect. `http:` is never
     /// admitted by either shell — only `https:` — so cleartext content
     /// stays blocked even after a user opts in.
-    static func pageURL(remoteContentAllowed: Bool) -> URL {
-        remoteContentAllowed ? remotePageURL : pageURL
+    static func shellURL(remoteContentAllowed: Bool) -> URL {
+        remoteContentAllowed ? remotePageURL : strictPageURL
     }
 
     /// Builds the `evaluateJavaScript` call that renders `bodyHTML` (run

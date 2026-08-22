@@ -123,7 +123,7 @@ struct LiveReloadTests {
         let webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 1012, height: 800))
         let waiter = NavigationWaiter()
         webView.navigationDelegate = waiter
-        webView.loadFileURL(MarkdownPage.pageURL, allowingReadAccessTo: MarkdownPage.resourceBaseURL)
+        webView.loadFileURL(MarkdownPage.strictPageURL, allowingReadAccessTo: MarkdownPage.resourceBaseURL)
         await waiter.waitUntilFinished()
         try await inject(bodyHTML, into: webView)
         return webView

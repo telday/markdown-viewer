@@ -30,7 +30,7 @@ struct MarkdownWebView: NSViewRepresentable {
         webView.navigationDelegate = context.coordinator
         context.coordinator.remoteContentAllowed = remoteContentAllowed
         webView.loadFileURL(
-            MarkdownPage.pageURL(remoteContentAllowed: remoteContentAllowed),
+            MarkdownPage.shellURL(remoteContentAllowed: remoteContentAllowed),
             allowingReadAccessTo: MarkdownPage.resourceBaseURL
         )
         return webView
@@ -54,7 +54,7 @@ struct MarkdownWebView: NSViewRepresentable {
             context.coordinator.remoteContentAllowed = true
             context.coordinator.state.beginReload()
             webView.loadFileURL(
-                MarkdownPage.pageURL(remoteContentAllowed: true),
+                MarkdownPage.shellURL(remoteContentAllowed: true),
                 allowingReadAccessTo: MarkdownPage.resourceBaseURL
             )
         }
@@ -101,7 +101,7 @@ struct MarkdownWebView: NSViewRepresentable {
                 url: navigationAction.request.url,
                 isLinkActivation: navigationAction.navigationType == .linkActivated
             )
-            let shellURL = MarkdownPage.pageURL(remoteContentAllowed: remoteContentAllowed)
+            let shellURL = MarkdownPage.shellURL(remoteContentAllowed: remoteContentAllowed)
             switch NavigationPolicy.decide(request, shellURL: shellURL) {
             case .allow:
                 decisionHandler(.allow)

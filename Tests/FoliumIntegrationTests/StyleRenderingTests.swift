@@ -69,7 +69,7 @@ struct StyleRenderingTests {
         webView.appearance = NSAppearance(named: appearance)
         let waiter = NavigationWaiter()
         webView.navigationDelegate = waiter
-        webView.loadFileURL(MarkdownPage.pageURL, allowingReadAccessTo: MarkdownPage.resourceBaseURL)
+        webView.loadFileURL(MarkdownPage.strictPageURL, allowingReadAccessTo: MarkdownPage.resourceBaseURL)
         await waiter.waitUntilFinished()
         _ = try await webView.evaluateJavaScript(MarkdownPage.renderBodyScript(bodyHTML: bodyHTML))
         return webView

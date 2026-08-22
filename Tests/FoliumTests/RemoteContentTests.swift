@@ -42,6 +42,28 @@ struct RemoteContentTests {
         #expect(RemoteContent.isReferenced(in: "<img src='https://example.com/badge.png'>"))
     }
 
+    // MARK: - Unquoted attribute values (legal HTML; live once #20 turns on raw HTML)
+
+    @Test func flagsAnUnquotedRemoteSrc() {
+        // `src=https://…` with no quotes at all is legal HTML. Unreachable
+        // through cmark-gfm's safe-mode output today, but issue #20 turns on
+        // CMARK_OPT_UNSAFE, which makes a document author's own raw HTML —
+        // quoted or not — reach the rendered body.
+        #expect(RemoteContent.isReferenced(in: "<img src=https://example.com/badge.png>"))
+    }
+
+    @Test func unquotedRemoteSrcStopsAtTheClosingAngleBracket() {
+        #expect(RemoteContent.isReferenced(in: "<img src=https://example.com/badge.png>trailing text"))
+    }
+
+    @Test func unquotedRemoteSrcStopsAtWhitespaceBeforeTheNextAttribute() {
+        #expect(RemoteContent.isReferenced(in: #"<img src=https://example.com/badge.png alt="badge">"#))
+    }
+
+    @Test func doesNotFlagAnUnquotedRelativePath() {
+        #expect(!RemoteContent.isReferenced(in: "<img src=images/logo.png>"))
+    }
+
     // MARK: - Negative: content #17/#18 already made safe
 
     @Test func doesNotFlagADataURI() {
