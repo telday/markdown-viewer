@@ -169,9 +169,18 @@ fi
 # render, and the permanently-unmeasured moments (warm open, tab switch,
 # scrolling), are moments the app can fully compute and format for itself —
 # see BenchMarker.measure and BenchBudget.unmeasuredReportLines — so this
-# script prints what it said verbatim rather than recomputing any of it.
+# script prints what it said verbatim rather than recomputing any of it. The
+# wire format is "FOLIUM_BENCH_REPORT <event> <pretty line>": the event token
+# is there so this script could look a line up by event if it ever needed to
+# (the same shape budget_ms already reads), not for display, so it has to be
+# stripped along with the literal prefix or it leaks into the printed report.
+# `render` fires twice per run — once for the initial open, again for the
+# live-reload probe — so this keeps only the first line per event (awk
+# `!seen[$2]++`, keyed on the still-present event token before it's
+# stripped), the same "first occurrence is the one being asked about" rule
+# marker_timestamp already applies to FOLIUM_BENCH markers.
 if grep -q "^FOLIUM_BENCH_REPORT " "$MARKERS" 2>/dev/null; then
-    grep "^FOLIUM_BENCH_REPORT " "$MARKERS" | sed 's/^FOLIUM_BENCH_REPORT //'
+    grep "^FOLIUM_BENCH_REPORT " "$MARKERS" | awk '!seen[$2]++' | sed -E 's/^FOLIUM_BENCH_REPORT [^ ]+ //'
 else
     report_line "Markdown → HTML render (fixture)" "" "" "renderer did not emit timing"
     report_line "Warm open (app already running) → painted" "" "" "requires driving an already-running app's UI"

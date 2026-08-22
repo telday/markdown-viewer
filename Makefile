@@ -143,18 +143,11 @@ bundle: build
 verify-bundle:
 	./scripts/verify-bundle.sh "$(APP_BUNDLE)" "$(VERSION)"
 
-## Measure and report latency budgets: cold launch, live-reload, Markdown render.
-## Builds a single-architecture release binary (see BENCH_BUILD_DIR above —
-## not the universal one `make bundle`/`make install` produce), generates a
-## deterministic ~500 KB fixture, launches the binary with FOLIUM_BENCH
-## (marker instrumentation) and FOLIUM_BENCH_OPEN (opens the fixture on
-## launch), and prints measured vs budgeted latency. Exits 0 regardless; CI
-## records the numbers as an informational trend, not a gate. See issue #21.
-##
-## The fixture is regenerated on every run, not treated as a file target
-## `make` can skip once it exists: scripts/bench.sh appends a live-reload
-## probe line to it in place, so a stale fixture from a previous run would
-## start the next run already mutated, and keep growing across repeated runs.
+## Measure and report latency budgets: cold launch, live-reload, Markdown
+## render. Regenerates the fixture on every run — scripts/bench.sh mutates it
+## in place for the live-reload probe, so a stale one would start already
+## probed. Exits 0 regardless; CI records this as a trend, not a gate. See
+## issue #21.
 bench: vendor
 	./scripts/make-bench-fixture.sh
 	swift build -c $(CONFIG)
