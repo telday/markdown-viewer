@@ -44,12 +44,8 @@ struct MarkdownWebView: NSViewRepresentable {
         let state = MarkdownWebViewState()
 
         /// Opens an external link. Injected, defaulting to the real
-        /// `NSWorkspace.shared.open(_:)`, so the integration test suite can
-        /// record what would have opened instead of literally launching the
-        /// user's browser on every test run — not to game coverage. The
-        /// branch that decides *whether* to open lives in `NavigationPolicy`,
-        /// which is what a unit test actually exercises; this closure only
-        /// stands in for the one AppKit call that decision leads to.
+        /// `NSWorkspace.shared.open(_:)`, so tests can record what would
+        /// have opened instead of launching the user's browser on every run.
         let openExternal: (URL) -> Void
 
         init(openExternal: @escaping (URL) -> Void = { NSWorkspace.shared.open($0) }) {

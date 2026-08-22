@@ -58,36 +58,40 @@ struct MarkdownPageTests {
             return
         }
         // Isolated to just the directive string, not the whole file: the
-        // surrounding doc comment quotes CSP fragments like `img-src 'self'`
-        // by name while explaining why they were rejected, and a whole-file
-        // substring check would trip over its own explanation.
+        // surrounding doc comment quotes CSP fragments like `script-src file:`
+        // by name while explaining the choice, and a whole-file substring
+        // check would trip over its own explanation.
         let cspContent = String(shell[cspOpen.upperBound..<cspClose.lowerBound])
 
         // Every asset tag must load under a policy that's already in force —
-        // a CSP appended after them would leave a window where nothing polices
-        // the very tags issue #17 exists to police.
-        let firstAssetTag = shell.range(of: "<link rel=\"stylesheet\"")
-        #expect(firstAssetTag.map { cspOpen.lowerBound < $0.lowerBound } == true)
+        // a CSP appended after them would leave a window where nothing
+        // polices the very tags issue #17 exists to police. Searched only
+        // after the meta tag closes, not from the top of the file: the doc
+        // comment above the meta tag itself quotes `<link rel="stylesheet">`
+        // by name, and a whole-file search would match that mention instead.
+        let firstAssetTag = shell.range(of: "<link rel=\"stylesheet\"", range: cspClose.upperBound..<shell.endIndex)
+        #expect(firstAssetTag != nil)
 
-        // `img-src 'self'` deliberately does not include `file:` — see the
-        // comment in page.html: `file:` as a source expression blocks this
-        // page's own local assets, verified against a real WKWebView. The
-        // `'self'` value itself (allows local images, blocks remote ones) is
-        // verified in `ContentSecurityPolicyTests.swift`.
+        // Every fetch directive uses the unquoted scheme-source `file:`, not
+        // `'self'` — see the comment in page.html: `'self'` was measured to
+        // still admit a cross-origin `https://` load on this `file://` page,
+        // which `file:` does not. Verified in `ContentSecurityPolicyTests.swift`.
         let directives = [
             "default-src 'none'",
-            "script-src 'self'",
-            "style-src 'self'",
-            "img-src 'self'",
-            "font-src 'self'",
-            "media-src 'self'",
+            "script-src file:",
+            "style-src file:",
+            "img-src file:",
+            "font-src file:",
+            "media-src file:",
             "base-uri 'none'",
             "form-action 'none'"
         ]
         for directive in directives {
             #expect(cspContent.contains(directive), "missing CSP directive: \(directive)")
         }
-        #expect(!cspContent.contains("img-src 'self' file:"))
+        // The whole point of this CSP: no directive may use 'self', which
+        // was found not to restrict http(s) sources on this file:// page.
+        #expect(!cspContent.contains("'self'"))
     }
 
     // MARK: - renderBodyScript

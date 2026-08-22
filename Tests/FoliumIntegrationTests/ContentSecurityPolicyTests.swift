@@ -7,27 +7,15 @@ import WebKit
 /// CSP `<meta>` tag in `Resources/page.html` and by
 /// `MarkdownWebView.Coordinator.decidePolicyFor`.
 ///
-/// The remote-image test points at a real `http://127.0.0.1` server the test
-/// spins up itself (`LocalHTTPServer`, below), rather than either a live
-/// internet host or a made-up unreachable one. Both of those were tried
-/// first and rejected: a live host makes the assertion's truth depend on
-/// whatever network access happens to exist wherever the suite runs (CI is
-/// expected to have none, so a remote fetch would fail identically whether
-/// or not CSP exists — no teeth either way), and reusing that reasoning to
-/// swap in a *local* fixture file instead of testing the remote case at all
-/// turned out to be wrong in a different way: it silently changed the
-/// shipped policy from `img-src 'self'` to `'none'`, which blocks local
-/// images too and would have broken every `![](photo.png)` in every
-/// document. A loopback HTTP server sidesteps both problems — it is
-/// reachable with zero external network, and it is genuinely remote from
-/// the CSP's point of view (a different origin from the `file://` shell),
-/// so `img-src 'self'` must still refuse it.
-///
-/// Listens for the browser's own `securitypolicyviolation` event (confirmed
-/// to fire reliably here, via `document.getElementById(...).innerHTML = ...`
-/// — the same DOM-injection path `window.FoliumRenderBody` uses in
-/// production, rather than `document.createElement`/`appendChild`, which is
-/// what an earlier version of this test used and never saw the event fire).
+/// The remote tests assert on the browser's own `securitypolicyviolation`
+/// event, which fires pre-request — before any network attempt — rather
+/// than on whether the resource loaded. That means the target URL doesn't
+/// need to be reachable at all, which is what makes these deterministic
+/// without a live network or a test-hosted server: `example.invalid` is an
+/// IANA-reserved domain guaranteed never to resolve. The event only fires
+/// reliably here via `element.innerHTML = ...` (the same DOM-injection path
+/// `window.FoliumRenderBody` uses in production) — `document.createElement`
+/// + `appendChild`, tried first, never saw it fire.
 ///
 /// Runs in a real `WKWebView` (and, for the two navigation tests, a real
 /// `NSWindow` — smooth-scroll animation and `decidePolicyFor` link clicks
@@ -41,32 +29,39 @@ struct ContentSecurityPolicyTests {
         AppKitHost.startIfNeeded()
     }
 
-    // MARK: - img-src
+    // MARK: - img-src / style-src
 
-    /// Positive control: without this, a CSP broad enough to block `img-src`
-    /// entirely (or a typo'd `default-src 'none'` with no `img-src` override
-    /// — verified fact #4 in the spec: that also blocks local images) would
-    /// pass the remote-blocked test below and silently break every local
-    /// image a document embeds — a floor-1 ("the document says what the file
-    /// says") violation, not just a network one.
+    /// Positive control: without this, a CSP broad enough to block every
+    /// fetch directive (or a typo'd `default-src 'none'` with no `img-src`
+    /// override — verified fact #4 in the spec: that also blocks local
+    /// images) would pass the remote-blocked tests below and silently break
+    /// every local image a document embeds — a floor-1 ("the document says
+    /// what the file says") violation, not just a network one.
+    ///
+    /// Loads a throwaway copy of the shell rather than the real
+    /// `MarkdownPage.resourceBaseURL` tree `loadedWebView` uses: writing a
+    /// fixture file into that directory would mutate the same build output
+    /// `make verify-bundle` inspects.
     @Test func localFileImageLoadsUnderCSP() async throws {
-        let (webView, waiter) = try await loadedWebView(recorder: OpenedURLRecorder())
-        defer { webView.window?.close() }
-        _ = waiter
+        let tempRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempRoot) }
+        let shellHTML = try String(contentsOf: MarkdownPage.pageURL, encoding: .utf8)
+        try shellHTML.write(to: tempRoot.appendingPathComponent("page.html"), atomically: true, encoding: .utf8)
+        try Self.onePixelPNG.write(to: tempRoot.appendingPathComponent("local.png"))
 
-        let fixtureName = "csp-fixture-\(UUID().uuidString).png"
-        let fixtureURL = MarkdownPage.resourceBaseURL
-            .appendingPathComponent("Resources")
-            .appendingPathComponent(fixtureName)
-        try Self.onePixelPNG.write(to: fixtureURL)
-        defer { try? FileManager.default.removeItem(at: fixtureURL) }
+        let webView = WKWebView(frame: NSRect(x: 0, y: 0, width: 900, height: 600))
+        let waiter = NavigationWaiter()
+        webView.navigationDelegate = waiter
+        webView.loadFileURL(tempRoot.appendingPathComponent("page.html"), allowingReadAccessTo: tempRoot)
+        await waiter.waitUntilFinished()
 
         let functionBody = """
         return new Promise(function (resolve) {
           var img = document.createElement('img');
           img.onload = function () { resolve(img.naturalWidth); };
           img.onerror = function () { resolve(-1); };
-          img.src = '\(fixtureName)';
+          img.src = 'local.png';
           document.body.appendChild(img);
           setTimeout(function () { resolve(-2); }, 2000);
         });
@@ -75,44 +70,46 @@ struct ContentSecurityPolicyTests {
         #expect((width as? Int ?? -1) > 0)
     }
 
-    /// The actual no-network-floor assertion: a remote `<img>` never loads,
-    /// and the browser's own `securitypolicyviolation` event confirms *why*
-    /// — CSP refused it pre-request, not some other, unrelated failure. See
-    /// the type doc comment for why this points at a loopback server this
-    /// test starts itself, and why the DOM content goes in via `innerHTML`.
+    /// The actual no-network-floor assertion for images: a remote `<img>`
+    /// never loads, and `securitypolicyviolation` confirms CSP refused it
+    /// rather than some unrelated failure.
     @Test func remoteImageIsBlockedByCSPAndReportsAViolation() async throws {
-        let server = try LocalHTTPServer(fileData: Self.onePixelPNG, fileName: "remote.png")
-        defer { server.stop() }
-        try await server.waitUntilReady()
-
         let (webView, waiter) = try await loadedWebView(recorder: OpenedURLRecorder())
         defer { webView.window?.close() }
-        _ = waiter
+        _ = waiter // kept alive: `navigationDelegate` is a weak reference
 
-        // Listener attached in the same script, before the img is inserted,
-        // so there's no window where the violation could fire unobserved.
-        _ = try await webView.evaluateJavaScript("""
-        (function () {
-          window.__cspViolations = [];
-          document.addEventListener('securitypolicyviolation', function (e) {
-            window.__cspViolations.push({ directive: e.violatedDirective, blockedURI: e.blockedURI });
-          });
-          document.getElementById('markdown-content').innerHTML =
-            '<img id="remote-img" src="http://127.0.0.1:\(server.port)/remote.png">';
-        })();
-        """)
-        // The violation fires synchronously with CSP in force; this is only
-        // a ceiling for the case something regresses, not an expected wait.
-        try await Task.sleep(nanoseconds: 1_500_000_000)
-
+        let violation = try await recordFirstCSPViolation(
+            on: webView,
+            injectingIntoMarkdownContent: #"<img id="remote-img" src="https://example.invalid/leak.png">"#
+        )
         let widthResult = try await webView.evaluateJavaScript("document.getElementById('remote-img').naturalWidth")
         #expect(widthResult as? Int == 0)
 
-        let violationsResult = try await webView.evaluateJavaScript("window.__cspViolations")
-        let violations = try #require(violationsResult as? [[String: Any]])
-        let violation = try #require(violations.first, "no securitypolicyviolation event fired for the remote <img>")
-        #expect(violation["directive"] as? String == "img-src")
-        #expect((violation["blockedURI"] as? String)?.contains("127.0.0.1") == true)
+        let recorded = try #require(violation, "no securitypolicyviolation event fired for the remote <img>")
+        #expect(recorded["directive"] as? String == "img-src")
+        #expect((recorded["blockedURI"] as? String)?.contains("example.invalid") == true)
+    }
+
+    /// The same no-network-floor assertion, for the other resource kind a
+    /// document could pull in remotely: a `<link rel="stylesheet">`.
+    /// Uncovered before this test — the img-src tests above don't exercise
+    /// `style-src` at all, and a document could reference a remote
+    /// stylesheet the same way it references a remote image.
+    @Test func remoteStylesheetIsBlockedByCSPAndReportsAViolation() async throws {
+        let (webView, waiter) = try await loadedWebView(recorder: OpenedURLRecorder())
+        defer { webView.window?.close() }
+        _ = waiter // kept alive: `navigationDelegate` is a weak reference
+
+        let linkTag = #"<link id="remote-css" rel="stylesheet" href="https://example.invalid/leak.css">"#
+        let violation = try await recordFirstCSPViolation(on: webView, injectingIntoMarkdownContent: linkTag)
+        let sheetResult = try await webView.evaluateJavaScript("!!document.getElementById('remote-css').sheet")
+        #expect(sheetResult as? Bool == false)
+
+        let recorded = try #require(violation, "no securitypolicyviolation event fired for the remote stylesheet")
+        // WebKit reports link-element style loads under the more specific
+        // "style-src-elem" sub-directive rather than plain "style-src".
+        #expect((recorded["directive"] as? String)?.hasPrefix("style-src") == true)
+        #expect((recorded["blockedURI"] as? String)?.contains("example.invalid") == true)
     }
 
     // MARK: - script-src-attr
@@ -120,7 +117,7 @@ struct ContentSecurityPolicyTests {
     @Test func inlineEventHandlerAttributeDoesNotFire() async throws {
         let (webView, waiter) = try await loadedWebView(recorder: OpenedURLRecorder())
         defer { webView.window?.close() }
-        _ = waiter
+        _ = waiter // kept alive: `navigationDelegate` is a weak reference
 
         // Verified without CSP: this handler runs and window.PWNED becomes
         // true. script-src 'self' blocks inline handlers as a
@@ -144,7 +141,7 @@ struct ContentSecurityPolicyTests {
         let recorder = OpenedURLRecorder()
         let (webView, waiter) = try await loadedWebView(recorder: recorder)
         defer { webView.window?.close() }
-        _ = waiter
+        _ = waiter // kept alive: `navigationDelegate` is a weak reference
 
         // Wrapped in a no-return IIFE: the last statement's value otherwise
         // becomes the script's result, and appendChild returns the appended
@@ -169,7 +166,7 @@ struct ContentSecurityPolicyTests {
     @Test func inDocumentAnchorLinkScrollsInsteadOfNavigating() async throws {
         let (webView, waiter) = try await loadedWebView(recorder: OpenedURLRecorder())
         defer { webView.window?.close() }
-        _ = waiter
+        _ = waiter // kept alive: `navigationDelegate` is a weak reference
 
         _ = try await webView.evaluateJavaScript("""
         (function () {
@@ -243,6 +240,38 @@ struct ContentSecurityPolicyTests {
         return (webView, waiter)
     }
 
+    /// Attaches a `securitypolicyviolation` listener, then injects `html`
+    /// into `#markdown-content` via `innerHTML` (see the type doc comment
+    /// for why `innerHTML`, not `createElement`), and returns the first
+    /// recorded violation's `directive`/`blockedURI`, or `nil` if none
+    /// fired. One evaluateJavaScript call, listener before content, so
+    /// there's no window where a violation could fire unobserved.
+    private func recordFirstCSPViolation(
+        on webView: WKWebView,
+        injectingIntoMarkdownContent html: String
+    ) async throws -> [String: Any]? {
+        // JSON-encoded, the same way MarkdownPage.renderBodyScript encodes
+        // rendered document HTML, since this string also contains quotes
+        // (the injected tag's own href/src attributes) that would otherwise
+        // break out of the JS string literal below.
+        let htmlJSON = try JSONEncoder().encode(html)
+        let htmlJSString = String(data: htmlJSON, encoding: .utf8)!
+        let functionBody = """
+        return new Promise(function (resolve) {
+          document.addEventListener('securitypolicyviolation', function handler(e) {
+            document.removeEventListener('securitypolicyviolation', handler);
+            resolve({ directive: e.violatedDirective, blockedURI: e.blockedURI });
+          });
+          document.getElementById('markdown-content').innerHTML = \(htmlJSString);
+          // The violation fires pre-request, synchronously with CSP in
+          // force; this is only a ceiling for the case something regresses.
+          setTimeout(function () { resolve(null); }, 2000);
+        });
+        """
+        let result = try await webView.callAsyncJavaScript(functionBody, in: nil, contentWorld: .page)
+        return result as? [String: Any]
+    }
+
     private func scrollY(of webView: WKWebView) async throws -> Double {
         let result = try await webView.evaluateJavaScript("window.scrollY")
         return (result as? Double) ?? 0
@@ -264,56 +293,28 @@ struct ContentSecurityPolicyTests {
     }
 }
 
-/// A real, minimal HTTP server on `127.0.0.1`, so the remote-image test has
-/// a genuinely different-origin URL to point at without depending on
-/// internet access existing wherever the suite runs.
-///
-/// Backed by `python3 -m http.server` as a subprocess rather than
-/// `Network.framework`'s `NWListener`: `NWListener` fails immediately with
-/// `POSIXErrorCode(rawValue: 22)` ("Invalid argument") in this sandbox, for
-/// a bare `swift` script as much as inside `swift test` — nothing to do with
-/// this test target specifically. `python3` is already a build-time
-/// dependency of this repo (`scripts/vendor-highlightjs.sh`'s `npm`
-/// tooling notwithstanding, `python3` ships with Xcode's command line
-/// tools), so this doesn't add a new one.
-final class LocalHTTPServer {
-    let port: Int
-    private let process: Process
-    private let directory: URL
+/// Bridges `WKNavigationDelegate`'s completion callback to `async/await`,
+/// with no `decidePolicyFor` override — used only where a test needs a page
+/// to finish loading and has no interest in navigation policy. (Reusing
+/// `CoordinatorWaiter` for that would run the real `Coordinator`, whose
+/// `decidePolicyFor` compares against `MarkdownPage.pageURL` specifically —
+/// wrong shell URL for a temp-directory copy of the page, and every
+/// navigation, including the page's own initial load, would come back
+/// `.block`.)
+@MainActor
+private final class NavigationWaiter: NSObject, WKNavigationDelegate {
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var finished = false
 
-    init(fileData: Data, fileName: String) throws {
-        port = Int.random(in: 20000..<40000)
-        directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        try fileData.write(to: directory.appendingPathComponent(fileName))
-
-        process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
-        process.arguments = ["-m", "http.server", String(port), "--bind", "127.0.0.1", "--directory", directory.path]
-        // Swallowed rather than left connected to the test runner's own
-        // stdout/stderr: http.server logs one line per request, which would
-        // otherwise interleave with `swift test`'s own output.
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
-        try process.run()
+    func waitUntilFinished() async {
+        if finished { return }
+        await withCheckedContinuation { continuation = $0 }
     }
 
-    /// Polls the server with a real request rather than a fixed sleep,
-    /// since `python3 -m http.server`'s startup time isn't specified.
-    func waitUntilReady() async throws {
-        let url = URL(string: "http://127.0.0.1:\(port)/")!
-        for _ in 0..<50 {
-            if let (_, response) = try? await URLSession.shared.data(from: url),
-               (response as? HTTPURLResponse) != nil {
-                return
-            }
-            try await Task.sleep(nanoseconds: 100_000_000)
-        }
-    }
-
-    func stop() {
-        process.terminate()
-        try? FileManager.default.removeItem(at: directory)
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        finished = true
+        continuation?.resume()
+        continuation = nil
     }
 }
 

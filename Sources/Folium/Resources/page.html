@@ -6,23 +6,24 @@
 <meta name="color-scheme" content="light dark">
 <!--
   Enforces CONTEXT.md's no-network floor: Folium originates no network
-  request, by policy engine rather than convention. Two directives are not
-  the obvious choice:
-  - `img-src 'self'`, not `'self' file:` — WKWebView treats `file:` as a
-    source expression rather than a synonym for the page's own `file://`
-    origin, and it blocks this page's own local assets outright (verified:
-    the page renders unstyled with no highlighting). `'self'` alone already
-    covers file:// siblings under loadFileURL's read-access grant, and
-    correctly blocks a remote `http(s)` `<img>` while still allowing a local
-    one — confirmed against the real shell in
-    `ContentSecurityPolicyTests.swift`, including the `securitypolicyviolation`
-    event actually firing for the blocked remote load.
-  - `base-uri 'none'` — issue #18 rewrites relative document-relative URLs
-    in Swift rather than injecting a <base> tag; leave this here so that
-    approach can't quietly regress to the tag-based one.
+  request, by policy engine rather than convention. No directive here uses
+  `'self'`: measured against this exact shell, `'self'` matched this page's
+  own `file://` origin loosely enough that a cross-origin remote image or
+  stylesheet still loaded — CSP's `'self'` keyword did not fence off a
+  remote scheme the way it would on a page actually served over the network.
+  The unquoted scheme-source `file:` (not the quoted string `'file:'`, which
+  is a different, invalid expression that matches nothing) restricts every
+  directive to `file://` URLs specifically, and still permits this page's
+  own local assets under loadFileURL's read-access grant. Verified in
+  `ContentSecurityPolicyTests.swift`: a remote image and a remote stylesheet
+  link are both blocked, with a `securitypolicyviolation` recorded for each,
+  while the bundled highlight.js and both local stylesheets still load.
+  `base-uri 'none'` is separately deliberate — issue #18 rewrites relative
+  document-relative URLs in Swift rather than injecting a <base> tag; leave
+  this here so that approach can't quietly regress to the tag-based one.
   Placed before the asset tags below so nothing in <head> loads unpoliced.
 -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; media-src 'self'; base-uri 'none'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src file:; style-src file:; img-src file:; font-src file:; media-src file:; base-uri 'none'; form-action 'none';">
 <link rel="stylesheet" href="github.css">
 <link rel="stylesheet" href="../HighlightJS/styles/github.min.css" media="(prefers-color-scheme: light)">
 <link rel="stylesheet" href="../HighlightJS/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">

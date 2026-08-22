@@ -25,11 +25,9 @@ enum NavigationDecision: Equatable {
 }
 
 /// Enforces `CONTEXT.md`'s no-network floor at the navigation layer: nothing
-/// this app loads may leave the shell's own `file://` page.
-///
-/// `MarkdownWebView.swift` is on the coverage exclusion list
-/// (`scripts/coverage.sh`), so this decision is a pure function rather than
-/// logic grown inside that glue — see `docs/agents/definition-of-done.md`.
+/// this app loads may leave the shell's own `file://` page. Kept as a pure
+/// function rather than grown inside `MarkdownWebView.swift`'s excluded
+/// glue — see `docs/agents/definition-of-done.md`.
 enum NavigationPolicy {
     /// - Parameter shellURL: `MarkdownPage.pageURL`, the shell's own address.
     ///   A request whose URL matches this one, fragment aside, is the shell

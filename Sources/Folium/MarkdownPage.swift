@@ -67,14 +67,7 @@ enum MarkdownPage {
     /// defined by `Resources/code-block.js`.
     static func renderBodyScript(bodyHTML: String) -> String {
         let decorated = CodeBlockDecorator.decorate(bodyHTML)
-        // Only unreachable for a String that can't round-trip as JSON, which
-        // cmark's UTF-8 HTML output always can — not any input a test can
-        // exercise. JSON string syntax is valid JS string syntax, so this
-        // also handles escaping quotes/newlines/etc. for the injection safely.
-        let failure = "Failed to JSON-encode rendered Markdown for JS injection."
-        guard let json = try? JSONEncoder().encode(decorated) else { fatalError(failure) }
-        guard let jsString = String(data: json, encoding: .utf8) else { fatalError(failure) }
-        return "window.FoliumRenderBody(\(jsString))"
+        return "window.FoliumRenderBody(\(jsStringLiteral(decorated)))"
     }
 
     /// How far one press of a scroll key moves the document, in lines of body
@@ -104,9 +97,22 @@ enum MarkdownPage {
     /// string directly, is what keeps a fragment like `");window.x=1;("`
     /// from breaking out of the string literal it's injected into.
     static func scrollToAnchorScript(_ fragment: String) -> String {
-        let failure = "Failed to JSON-encode an anchor fragment for JS injection."
-        guard let json = try? JSONEncoder().encode(fragment) else { fatalError(failure) }
+        return "window.FoliumScrollToAnchor(\(jsStringLiteral(fragment)))"
+    }
+
+    /// Encodes `value` as JSON and returns the resulting bytes as a Swift
+    /// `String`, which is what `renderBodyScript` and `scrollToAnchorScript`
+    /// both actually need: JSON string syntax is valid JS string syntax, so
+    /// the result can go straight into a `window.Foo(...)` call as a safely
+    /// escaped argument — quotes, newlines, and `</script>`-closing
+    /// sequences included.
+    private static func jsStringLiteral(_ value: String) -> String {
+        // Only unreachable for a String that can't round-trip as JSON. Never
+        // true for cmark's UTF-8 HTML output or a URL fragment, so nothing a
+        // test can construct reaches it.
+        let failure = "Failed to JSON-encode a value for JS injection."
+        guard let json = try? JSONEncoder().encode(value) else { fatalError(failure) }
         guard let jsString = String(data: json, encoding: .utf8) else { fatalError(failure) }
-        return "window.FoliumScrollToAnchor(\(jsString))"
+        return jsString
     }
 }
