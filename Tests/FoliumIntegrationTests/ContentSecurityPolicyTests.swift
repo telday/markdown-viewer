@@ -7,30 +7,27 @@ import WebKit
 /// CSP `<meta>` tag in `Resources/page.html` and by
 /// `MarkdownWebView.Coordinator.decidePolicyFor`.
 ///
-/// The image-blocking test deliberately does **not** point at a remote
-/// `https://` URL and does **not** listen for the browser's own
-/// `securitypolicyviolation` event — both were tried first, and neither
-/// holds up:
-/// - CI has no network, so a remote image fails to load whether or not CSP
-///   exists; asserting `naturalWidth === 0` against a remote URL would pass
-///   even with the CSP meta tag deleted.
-/// - `securitypolicyviolation` never fired in this WebKit build, for any
-///   directive, no matter when or how the listener was attached (before or
-///   after the offending element, on `window` or `document`, capture phase,
-///   `ReportingObserver`, or a violation baked into the initial HTML). This
-///   contradicts what the architecture spec's own spike found, and is called
-///   out in the PR as a discrepancy worth re-checking on another machine.
+/// The remote-image test points at a real `http://127.0.0.1` server the test
+/// spins up itself (`LocalHTTPServer`, below), rather than either a live
+/// internet host or a made-up unreachable one. Both of those were tried
+/// first and rejected: a live host makes the assertion's truth depend on
+/// whatever network access happens to exist wherever the suite runs (CI is
+/// expected to have none, so a remote fetch would fail identically whether
+/// or not CSP exists — no teeth either way), and reusing that reasoning to
+/// swap in a *local* fixture file instead of testing the remote case at all
+/// turned out to be wrong in a different way: it silently changed the
+/// shipped policy from `img-src 'self'` to `'none'`, which blocks local
+/// images too and would have broken every `![](photo.png)` in every
+/// document. A loopback HTTP server sidesteps both problems — it is
+/// reachable with zero external network, and it is genuinely remote from
+/// the CSP's point of view (a different origin from the `file://` shell),
+/// so `img-src 'self'` must still refuse it.
 ///
-/// What does have real, verified teeth here: pointing the same `<img>` at a
-/// **local** fixture file instead. A local file's load-or-not is decided by
-/// the filesystem, not the network, so it's fully deterministic in a
-/// network-less CI the same way it would be on a developer's machine — and
-/// this is the same `img-src` directive that also governs remote loads, so a
-/// regression that lets local images through would let remote ones through
-/// too. See the doc comment on `Resources/page.html`'s CSP meta tag for why
-/// it reads `img-src 'none'` rather than the `'self'` the issue and the
-/// architecture spec both suggested: measured here, `'self'` did not
-/// actually restrict a remote `<img>` on this `file://` page at all.
+/// Listens for the browser's own `securitypolicyviolation` event (confirmed
+/// to fire reliably here, via `document.getElementById(...).innerHTML = ...`
+/// — the same DOM-injection path `window.FoliumRenderBody` uses in
+/// production, rather than `document.createElement`/`appendChild`, which is
+/// what an earlier version of this test used and never saw the event fire).
 ///
 /// Runs in a real `WKWebView` (and, for the two navigation tests, a real
 /// `NSWindow` — smooth-scroll animation and `decidePolicyFor` link clicks
@@ -46,14 +43,13 @@ struct ContentSecurityPolicyTests {
 
     // MARK: - img-src
 
-    /// `img-src 'none'` must block every image load, local or remote alike —
-    /// there is no exception carved out, unlike `script-src`/`style-src`
-    /// `'self'` which lets this app's own bundled assets through. Pointed at
-    /// a **local** fixture rather than a live remote URL specifically so the
-    /// assertion is deterministic with or without network access (see the
-    /// type doc comment for why a remote URL can't give this real teeth in a
-    /// network-less CI, and why `'self'` isn't what ships here).
-    @Test func imageLoadingIsBlockedByCSPEvenForALocalFile() async throws {
+    /// Positive control: without this, a CSP broad enough to block `img-src`
+    /// entirely (or a typo'd `default-src 'none'` with no `img-src` override
+    /// — verified fact #4 in the spec: that also blocks local images) would
+    /// pass the remote-blocked test below and silently break every local
+    /// image a document embeds — a floor-1 ("the document says what the file
+    /// says") violation, not just a network one.
+    @Test func localFileImageLoadsUnderCSP() async throws {
         let (webView, waiter) = try await loadedWebView(recorder: OpenedURLRecorder())
         defer { webView.window?.close() }
         _ = waiter
@@ -76,9 +72,47 @@ struct ContentSecurityPolicyTests {
         });
         """
         let width = try await webView.callAsyncJavaScript(functionBody, in: nil, contentWorld: .page)
-        // -1 (onerror fired) is the expected outcome; -2 would mean neither
-        // onload nor onerror ever fired, which is its own kind of wrong.
-        #expect(width as? Int == -1)
+        #expect((width as? Int ?? -1) > 0)
+    }
+
+    /// The actual no-network-floor assertion: a remote `<img>` never loads,
+    /// and the browser's own `securitypolicyviolation` event confirms *why*
+    /// — CSP refused it pre-request, not some other, unrelated failure. See
+    /// the type doc comment for why this points at a loopback server this
+    /// test starts itself, and why the DOM content goes in via `innerHTML`.
+    @Test func remoteImageIsBlockedByCSPAndReportsAViolation() async throws {
+        let server = try LocalHTTPServer(fileData: Self.onePixelPNG, fileName: "remote.png")
+        defer { server.stop() }
+        try await server.waitUntilReady()
+
+        let (webView, waiter) = try await loadedWebView(recorder: OpenedURLRecorder())
+        defer { webView.window?.close() }
+        _ = waiter
+
+        // Listener attached in the same script, before the img is inserted,
+        // so there's no window where the violation could fire unobserved.
+        _ = try await webView.evaluateJavaScript("""
+        (function () {
+          window.__cspViolations = [];
+          document.addEventListener('securitypolicyviolation', function (e) {
+            window.__cspViolations.push({ directive: e.violatedDirective, blockedURI: e.blockedURI });
+          });
+          document.getElementById('markdown-content').innerHTML =
+            '<img id="remote-img" src="http://127.0.0.1:\(server.port)/remote.png">';
+        })();
+        """)
+        // The violation fires synchronously with CSP in force; this is only
+        // a ceiling for the case something regresses, not an expected wait.
+        try await Task.sleep(nanoseconds: 1_500_000_000)
+
+        let widthResult = try await webView.evaluateJavaScript("document.getElementById('remote-img').naturalWidth")
+        #expect(widthResult as? Int == 0)
+
+        let violationsResult = try await webView.evaluateJavaScript("window.__cspViolations")
+        let violations = try #require(violationsResult as? [[String: Any]])
+        let violation = try #require(violations.first, "no securitypolicyviolation event fired for the remote <img>")
+        #expect(violation["directive"] as? String == "img-src")
+        #expect((violation["blockedURI"] as? String)?.contains("127.0.0.1") == true)
     }
 
     // MARK: - script-src-attr
@@ -227,6 +261,59 @@ struct ContentSecurityPolicyTests {
             try? await Task.sleep(for: .milliseconds(10))
         }
         return (try? await condition()) == true
+    }
+}
+
+/// A real, minimal HTTP server on `127.0.0.1`, so the remote-image test has
+/// a genuinely different-origin URL to point at without depending on
+/// internet access existing wherever the suite runs.
+///
+/// Backed by `python3 -m http.server` as a subprocess rather than
+/// `Network.framework`'s `NWListener`: `NWListener` fails immediately with
+/// `POSIXErrorCode(rawValue: 22)` ("Invalid argument") in this sandbox, for
+/// a bare `swift` script as much as inside `swift test` — nothing to do with
+/// this test target specifically. `python3` is already a build-time
+/// dependency of this repo (`scripts/vendor-highlightjs.sh`'s `npm`
+/// tooling notwithstanding, `python3` ships with Xcode's command line
+/// tools), so this doesn't add a new one.
+final class LocalHTTPServer {
+    let port: Int
+    private let process: Process
+    private let directory: URL
+
+    init(fileData: Data, fileName: String) throws {
+        port = Int.random(in: 20000..<40000)
+        directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try fileData.write(to: directory.appendingPathComponent(fileName))
+
+        process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
+        process.arguments = ["-m", "http.server", String(port), "--bind", "127.0.0.1", "--directory", directory.path]
+        // Swallowed rather than left connected to the test runner's own
+        // stdout/stderr: http.server logs one line per request, which would
+        // otherwise interleave with `swift test`'s own output.
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        try process.run()
+    }
+
+    /// Polls the server with a real request rather than a fixed sleep,
+    /// since `python3 -m http.server`'s startup time isn't specified.
+    func waitUntilReady() async throws {
+        let url = URL(string: "http://127.0.0.1:\(port)/")!
+        for _ in 0..<50 {
+            if let (_, response) = try? await URLSession.shared.data(from: url),
+               (response as? HTTPURLResponse) != nil {
+                return
+            }
+            try await Task.sleep(nanoseconds: 100_000_000)
+        }
+    }
+
+    func stop() {
+        process.terminate()
+        try? FileManager.default.removeItem(at: directory)
     }
 }
 

@@ -69,19 +69,16 @@ struct MarkdownPageTests {
         let firstAssetTag = shell.range(of: "<link rel=\"stylesheet\"")
         #expect(firstAssetTag.map { cspOpen.lowerBound < $0.lowerBound } == true)
 
-        // `img-src 'none'`, not `'self'` — see the comment in page.html:
-        // measured directly against ContentSecurityPolicyTests, `'self'` was
-        // found not to restrict a remote `<img>` on a `file://` document at
-        // all here, unlike script-src/style-src's 'self'. `'none'` was
-        // confirmed to actually block it, at the cost of also blocking local
-        // images — a cost this app doesn't pay for anything yet, since it
-        // has no `<img>` tags of its own and no document-relative image
-        // feature (that's issue #18).
+        // `img-src 'self'` deliberately does not include `file:` — see the
+        // comment in page.html: `file:` as a source expression blocks this
+        // page's own local assets, verified against a real WKWebView. The
+        // `'self'` value itself (allows local images, blocks remote ones) is
+        // verified in `ContentSecurityPolicyTests.swift`.
         let directives = [
             "default-src 'none'",
             "script-src 'self'",
             "style-src 'self'",
-            "img-src 'none'",
+            "img-src 'self'",
             "font-src 'self'",
             "media-src 'self'",
             "base-uri 'none'",
@@ -90,7 +87,7 @@ struct MarkdownPageTests {
         for directive in directives {
             #expect(cspContent.contains(directive), "missing CSP directive: \(directive)")
         }
-        #expect(!cspContent.contains("img-src 'self'"))
+        #expect(!cspContent.contains("img-src 'self' file:"))
     }
 
     // MARK: - renderBodyScript
