@@ -38,13 +38,46 @@ struct MarkdownWebView: NSViewRepresentable {
 
     /// Bridges the shell's one-time `didFinish` navigation callback to
     /// `MarkdownWebViewState`, and delivers whatever content was queued
-    /// while it was still loading.
+    /// while it was still loading. Also enforces `CONTEXT.md`'s no-network
+    /// floor at the navigation layer via `decidePolicyFor`.
     final class Coordinator: NSObject, WKNavigationDelegate {
         let state = MarkdownWebViewState()
+
+        /// Opens an external link. Injected, defaulting to the real
+        /// `NSWorkspace.shared.open(_:)`, so tests can record what would
+        /// have opened instead of launching the user's browser on every run.
+        let openExternal: (URL) -> Void
+
+        init(openExternal: @escaping (URL) -> Void = { NSWorkspace.shared.open($0) }) {
+            self.openExternal = openExternal
+        }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             guard let queued = state.shellDidFinishLoading() else { return }
             webView.evaluateJavaScript(MarkdownPage.renderBodyScript(bodyHTML: queued))
+        }
+
+        func webView(
+            _ webView: WKWebView,
+            decidePolicyFor navigationAction: WKNavigationAction,
+            decisionHandler: @escaping @MainActor @Sendable (WKNavigationActionPolicy) -> Void
+        ) {
+            let request = NavigationRequest(
+                url: navigationAction.request.url,
+                isLinkActivation: navigationAction.navigationType == .linkActivated
+            )
+            switch NavigationPolicy.decide(request, shellURL: MarkdownPage.pageURL) {
+            case .allow:
+                decisionHandler(.allow)
+            case .openInBrowser(let url):
+                openExternal(url)
+                decisionHandler(.cancel)
+            case .scrollToAnchor(let fragment):
+                webView.evaluateJavaScript(MarkdownPage.scrollToAnchorScript(fragment))
+                decisionHandler(.cancel)
+            case .block:
+                decisionHandler(.cancel)
+            }
         }
     }
 }
