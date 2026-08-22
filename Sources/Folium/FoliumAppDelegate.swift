@@ -19,13 +19,12 @@ final class FoliumAppDelegate: NSObject, NSApplicationDelegate {
     /// both do this through an Apple Event, but that event only reaches an
     /// app process Launch Services itself spawned — not one this script
     /// starts directly, which it has to do to read the process's own
-    /// stderr. FOLIUM_BENCH_OPEN reaches the same `NSDocumentController`
-    /// call a double-click would, just triggered by an environment variable
+    /// stderr. `BenchOpen` reaches the same `NSDocumentController` call a
+    /// double-click would, just triggered by an environment variable
     /// instead of an Apple Event. Unset for every real user, so this is
     /// inert outside a bench run.
     func applicationDidFinishLaunching(_ notification: Notification) {
-        guard let path = Foundation.getenv("FOLIUM_BENCH_OPEN") else { return }
-        let url = URL(fileURLWithPath: String(cString: path))
+        guard let url = BenchOpen.url() else { return }
         NSDocumentController.shared.openDocument(withContentsOf: url, display: true) { _, _, _ in }
     }
 

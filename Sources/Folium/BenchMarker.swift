@@ -40,6 +40,15 @@ struct BenchMarker: Sendable {
         self.write = write
     }
 
+    /// Whether FOLIUM_BENCH is set. Exposed so a caller can skip work that
+    /// only exists to be measured — not just the write `mark` already skips,
+    /// but the cost of *producing* something to write, which for a paint
+    /// confirmation is an extra `WKWebView` round trip a real user must
+    /// never pay for. See `MarkdownWebViewState.paintEventToConfirm`.
+    var isEnabled: Bool {
+        getenv("FOLIUM_BENCH") != nil
+    }
+
     /// Emit a marker line if FOLIUM_BENCH is set. A complete no-op
     /// otherwise: no clock read, no formatting, nothing written.
     ///
@@ -48,8 +57,43 @@ struct BenchMarker: Sendable {
     /// concurrently is never a data race, and unit tests can call it in any
     /// order without one leaking into another.
     func mark(_ event: String) {
-        guard getenv("FOLIUM_BENCH") != nil else { return }
-        guard let data = Self.formatMarkerLine(event: event, timestamp: now()).data(using: .utf8) else { return }
+        guard isEnabled else { return }
+        writeRaw(Self.formatMarkerLine(event: event, timestamp: now()))
+    }
+
+    /// Writes `line` verbatim, gated the same way `mark` is. For output that
+    /// isn't a `FOLIUM_BENCH <event> <timestamp>` marker — a pre-formatted
+    /// report line, or the budget table `scripts/bench.sh` reads instead of
+    /// keeping its own copy of `BenchBudget.budgets`.
+    func writeLine(_ line: String) {
+        guard isEnabled else { return }
+        writeRaw(line + "\n")
+    }
+
+    /// Marks `startEvent` and `endEvent` around `body`, and — only under
+    /// FOLIUM_BENCH — also writes the full budget report line for
+    /// `reportEvent`, computed from the real gap between the two marks.
+    /// `render` is the only budgeted moment that starts and ends entirely
+    /// inside this process: cold launch and live-reload both need a
+    /// wall-clock reading from outside it (`scripts/bench.sh` takes that
+    /// reading), so this is the one moment that can report its own
+    /// comparison against `BenchBudget` rather than handing raw numbers to
+    /// the shell to compare itself.
+    @discardableResult
+    func measure<T>(_ startEvent: String, _ endEvent: String, reportAs reportEvent: String, _ body: () -> T) -> T {
+        guard isEnabled else { return body() }
+        let start = now()
+        let result = body()
+        let end = now()
+        writeRaw(Self.formatMarkerLine(event: startEvent, timestamp: start))
+        writeRaw(Self.formatMarkerLine(event: endEvent, timestamp: end))
+        let report = BenchBudget.reportLine(event: reportEvent, measuredMs: (end - start) * 1000)
+        writeRaw("FOLIUM_BENCH_REPORT \(reportEvent) \(report)\n")
+        return result
+    }
+
+    private func writeRaw(_ line: String) {
+        guard let data = line.data(using: .utf8) else { return }
         write(data)
     }
 

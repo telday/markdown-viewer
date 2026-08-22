@@ -57,24 +57,29 @@ struct MarkdownWebView: NSViewRepresentable {
             inject(queued, into: webView)
         }
 
-        /// Injects rendered body HTML. For the document's first paint only,
-        /// chains `MarkdownPage.paintConfirmationScript` — run via
-        /// `callAsyncJavaScript` rather than `evaluateJavaScript`, because
-        /// (confirmed against a real `WKWebView`) `evaluateJavaScript` does
-        /// not wait for a returned `Promise`; only `callAsyncJavaScript`,
-        /// which runs the string as an `async` function body, waits for its
-        /// `await`s before calling back. `first-paint` is marked from that
-        /// callback rather than this call's. See `MarkdownWebViewState
-        /// .shouldConfirmFirstPaint` for why later injections skip this.
+        /// Injects rendered body HTML. Outside a bench run this is a single
+        /// `evaluateJavaScript` call with no completion handler, same as
+        /// before this file measured anything. Under FOLIUM_BENCH,
+        /// `MarkdownWebViewState.paintEventToConfirm` names an event to
+        /// confirm and mark, and confirming means chaining
+        /// `MarkdownPage.paintConfirmationScript` through
+        /// `callAsyncJavaScript` — `evaluateJavaScript` does not wait for a
+        /// returned `Promise`, confirmed against a real `WKWebView`;
+        /// `callAsyncJavaScript` runs the string as an `async` function body
+        /// and does wait, on its `await`s.
         func inject(_ bodyHTML: String, into webView: WKWebView) {
-            webView.evaluateJavaScript(MarkdownPage.renderBodyScript(bodyHTML: bodyHTML)) { [state] _, _ in
-                guard state.shouldConfirmFirstPaint() else { return }
+            let script = MarkdownPage.renderBodyScript(bodyHTML: bodyHTML)
+            guard let event = state.paintEventToConfirm() else {
+                webView.evaluateJavaScript(script)
+                return
+            }
+            webView.evaluateJavaScript(script) { [state] _, _ in
                 Task { @MainActor in
                     _ = try? await webView.callAsyncJavaScript(
                         MarkdownPage.paintConfirmationScript,
                         contentWorld: .page
                     )
-                    state.benchMarker.mark("first-paint")
+                    state.benchMarker.mark(event)
                 }
             }
         }

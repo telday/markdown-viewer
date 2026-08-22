@@ -35,9 +35,9 @@ final class LiveDocument: ObservableObject {
         scheduler: any ReloadScheduler = SleepingReloadScheduler()
     ) {
         self.fileURL = fileURL
-        benchMarker.mark("render-start")
-        bodyHTML = MarkdownRenderer.renderHTML(from: text)
-        benchMarker.mark("render-end")
+        bodyHTML = benchMarker.measure("render-start", "render-end", reportAs: "render") {
+            MarkdownRenderer.renderHTML(from: text)
+        }
 
         guard let fileURL else { return }
         coalescer = ReloadCoalescer(scheduler: scheduler) { [weak self] in
@@ -70,13 +70,16 @@ final class LiveDocument: ObservableObject {
         guard let fileURL, let data = try? Data(contentsOf: fileURL) else { return }
         guard let text = try? MarkdownLoading.text(fromUTF8: data) else { return }
 
-        benchMarker.mark("render-start")
-        let rendered = MarkdownRenderer.renderHTML(from: text)
-        benchMarker.mark("render-end")
+        let rendered = benchMarker.measure("render-start", "render-end", reportAs: "render") {
+            MarkdownRenderer.renderHTML(from: text)
+        }
         // `touch`, chmod, or a save of unchanged bytes: no publish, no
         // injection into the web view, no repaint.
         guard rendered != bodyHTML else { return }
         bodyHTML = rendered
-        benchMarker.mark("reload-paint")
+        // `reload-paint` is marked once the web view confirms the repaint
+        // actually landed, not here — see `MarkdownWebViewState
+        // .paintEventToConfirm`. Publishing this is the trigger, not the
+        // measured moment.
     }
 }

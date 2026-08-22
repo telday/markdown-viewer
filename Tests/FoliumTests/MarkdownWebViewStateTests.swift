@@ -40,11 +40,22 @@ struct MarkdownWebViewStateTests {
         #expect(state.shellDidFinishLoading() == nil)
     }
 
-    @Test func shouldConfirmFirstPaintIsTrueOnlyTheFirstTime() {
+    @Test func paintEventToConfirmIsNilWhenBenchIsDisabled() {
+        // A real user's launch and every one of their live-reloads must
+        // never pay for the paint-confirmation round trip.
         let state = MarkdownWebViewState()
+        state.benchMarker = BenchMarker(getenv: { _ in nil })
 
-        #expect(state.shouldConfirmFirstPaint())
-        #expect(!state.shouldConfirmFirstPaint())
-        #expect(!state.shouldConfirmFirstPaint())
+        #expect(state.paintEventToConfirm() == nil)
+        #expect(state.paintEventToConfirm() == nil)
+    }
+
+    @Test func paintEventToConfirmIsFirstPaintOnceThenReloadPaint() {
+        let state = MarkdownWebViewState()
+        state.benchMarker = BenchMarker(getenv: { $0 == "FOLIUM_BENCH" ? "1" : nil })
+
+        #expect(state.paintEventToConfirm() == "first-paint")
+        #expect(state.paintEventToConfirm() == "reload-paint")
+        #expect(state.paintEventToConfirm() == "reload-paint")
     }
 }

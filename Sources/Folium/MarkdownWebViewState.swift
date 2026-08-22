@@ -12,7 +12,7 @@
 final class MarkdownWebViewState {
     private var isShellLoaded = false
     private var pendingBodyHTML: String?
-    private var hasConfirmedFirstPaint = false
+    private var hasEmittedFirstPaint = false
     var benchMarker: BenchMarker = BenchMarker()
 
     /// Call when the shell's one-time `WKNavigationDelegate` `didFinish`
@@ -36,22 +36,26 @@ final class MarkdownWebViewState {
         return bodyHTML
     }
 
-    /// One-shot latch: `true` only the first time it is called, `false`
-    /// every time after. `MarkdownWebView` calls this after an injection
-    /// completes and the browser has confirmed a frame was actually drawn,
-    /// and only marks `first-paint` when it answers `true` — the decision of
-    /// *whether* an injection counts as the first paint lives here, where it
-    /// can be unit-tested, while confirming the paint itself needs a real
-    /// `WKWebView` and stays in that excluded glue file.
+    /// Which marker an injection's paint should be confirmed and reported
+    /// under, or `nil` if it shouldn't be confirmed at all: `"first-paint"`
+    /// the first time this is called, `"reload-paint"` every time after,
+    /// `nil` whenever FOLIUM_BENCH is unset. `MarkdownWebView` calls this
+    /// before deciding how to inject — the decision of *whether* and *what*
+    /// to confirm lives here, where it can be unit-tested, while confirming
+    /// a paint for real needs a live `WKWebView` and stays in that excluded
+    /// glue file.
     ///
-    /// Only the document's first paint is worth this round trip. Every
-    /// injection after that is a live-reload, and its own speed is already
-    /// measured by `LiveDocument`'s `reload-paint` marker — confirming a
-    /// paint costs two animation frames, and paying that on every reload
-    /// would eat into the 100 ms budget for a number nothing needs.
-    func shouldConfirmFirstPaint() -> Bool {
-        guard !hasConfirmedFirstPaint else { return false }
-        hasConfirmedFirstPaint = true
-        return true
+    /// The `nil` case is not an optimization, it is the point: confirming a
+    /// paint means chaining a second, awaited `WKWebView` call after the
+    /// first, and a real user launching or live-reloading with FOLIUM_BENCH
+    /// unset must never pay for that extra round trip — the exact thing
+    /// `CONTEXT.md`'s latency budgets are measuring.
+    func paintEventToConfirm() -> String? {
+        guard benchMarker.isEnabled else { return nil }
+        guard hasEmittedFirstPaint else {
+            hasEmittedFirstPaint = true
+            return "first-paint"
+        }
+        return "reload-paint"
     }
 }

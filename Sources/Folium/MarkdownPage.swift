@@ -70,20 +70,13 @@ enum MarkdownPage {
         return "window.FoliumRenderBody(\(jsStringLiteral(decorated)))"
     }
 
-    /// A function body for confirming a frame has actually been drawn, not
-    /// just scheduled. `evaluateJavaScript`'s completion handler fires as
-    /// soon as the script *runs*, which for `renderBodyScript` is before
-    /// WebKit has laid out or painted the new DOM — and, confirmed against a
-    /// real `WKWebView`, `evaluateJavaScript` does not wait for a returned
-    /// `Promise` either; a script whose value is a pending `Promise` fails
-    /// immediately with "unsupported type" rather than waiting for it to
-    /// settle. `callAsyncJavaScript` is the API that actually does the
-    /// waiting: it runs this string as the body of an `async` function, and
-    /// only calls back once that function's own `await`s are done. Two
-    /// nested `requestAnimationFrame` calls is the standard trick for
-    /// finding out a frame really landed: the browser only runs a rAF
-    /// callback right before it paints, so the first one lands before *this*
-    /// injection's paint, and the second lands after it.
+    /// An async function body (for `callAsyncJavaScript`, not
+    /// `evaluateJavaScript` — see `MarkdownWebView.inject`) confirming a
+    /// frame has actually been drawn. The browser only runs a
+    /// `requestAnimationFrame` callback right before it paints, so the first
+    /// one lands before this injection's paint and the second lands after
+    /// it — the standard way to learn a frame really landed, not just that
+    /// the script that scheduled it finished running.
     static let paintConfirmationScript = """
         await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         return true;

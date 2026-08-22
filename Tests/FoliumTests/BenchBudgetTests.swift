@@ -50,4 +50,24 @@ struct BenchBudgetTests {
         // The line should have dots between the event name and the measurement.
         #expect(line.contains("..."))
     }
+
+    @Test func budgetTableLinesCoverEveryBudgetedEvent() {
+        let lines = BenchBudget.budgetTableLines()
+        #expect(lines.contains("FOLIUM_BENCH_BUDGET cold-launch 500"))
+        #expect(lines.contains("FOLIUM_BENCH_BUDGET reload-paint 100"))
+        // "render" has no budget, so it must not appear here — scripts/bench.sh
+        // treats an event with no budget line as unbudgeted, informational only.
+        #expect(!lines.contains { $0.contains("render") })
+    }
+
+    @Test func unmeasuredReportLinesCoverEveryPermanentlyUnmeasuredMoment() {
+        let lines = BenchBudget.unmeasuredReportLines()
+        #expect(lines.count == 3)
+        // Event-prefixed, like BenchMarker.measure's FOLIUM_BENCH_REPORT
+        // lines, so scripts/bench.sh can look either kind up by event.
+        #expect(lines.contains { $0.hasPrefix("FOLIUM_BENCH_REPORT warm-open ") && $0.contains("Warm open") })
+        #expect(lines.contains { $0.hasPrefix("FOLIUM_BENCH_REPORT tab-switch ") && $0.contains("Tab switch") })
+        #expect(lines.contains { $0.hasPrefix("FOLIUM_BENCH_REPORT scrolling ") && $0.contains("Scrolling") })
+        #expect(lines.allSatisfy { $0.contains("not measured") })
+    }
 }

@@ -20,12 +20,35 @@ struct BenchBudget {
     static let names: [String: String] = [
         "cold-launch": "Cold launch → first document painted",
         "reload-paint": "Live-reload: file written → repainted",
-        "render": "Markdown → HTML render (fixture)"
+        "render": "Markdown → HTML render (fixture)",
+        "warm-open": "Warm open (app already running) → painted",
+        "tab-switch": "Tab switch",
+        "scrolling": "Scrolling / dropped frames"
+    ]
+
+    /// Why each permanently-unmeasured moment can't be measured.
+    static let unmeasuredReasons: [String: String] = [
+        "warm-open": "requires driving an already-running app's UI",
+        "tab-switch": "requires driving an already-running app's UI",
+        "scrolling": "out of scope for this fixture"
     ]
 
     /// Lookup the budget for an event in milliseconds, or nil if unmeasured.
     static func budget(for event: String) -> Double? {
         return budgets[event]
+    }
+
+    /// One line per budgeted moment, in the wire format `scripts/bench.sh`
+    /// parses: `FOLIUM_BENCH_BUDGET <event> <milliseconds>`. `cold-launch`
+    /// and `reload-paint` both need a wall-clock reading the script takes
+    /// from outside this process, so the script — not this type — is what
+    /// ends up comparing them to budget. Emitting this table under
+    /// FOLIUM_BENCH is what lets the script read the numbers here instead of
+    /// keeping a second, hand-synced copy of `budgets`.
+    static func budgetTableLines() -> [String] {
+        budgets.keys.sorted().map { event in
+            "FOLIUM_BENCH_BUDGET \(event) \(Int(budgets[event] ?? 0))"
+        }
     }
 
     /// Format a measurement line for the report, comparing measured vs budget.
@@ -61,5 +84,21 @@ struct BenchBudget {
         let dots = max(1, 60 - name.count - 12) // "not measured" is ~12 chars
         let padding = String(repeating: ".", count: dots)
         return "  \(name)\(padding) not measured (\(reason))"
+    }
+
+    /// The permanently-unmeasured moments, pre-formatted and prefixed for
+    /// `BenchMarker.writeLine`: `FOLIUM_BENCH_REPORT <event> <line>` — the
+    /// same wire format `BenchMarker.measure` uses for `render`, so
+    /// `scripts/bench.sh` can look either kind up by event and fall back
+    /// per-event if one is ever missing. None of these depend on anything
+    /// that happens at runtime — driving an already-running app's own UI
+    /// can't happen from a process `scripts/bench.sh` launches once and
+    /// tears down — so the app states them once, at launch, instead of the
+    /// script hardcoding them.
+    static func unmeasuredReportLines() -> [String] {
+        unmeasuredReasons.keys.sorted().map { event in
+            let line = reportLineUnmeasured(event: event, reason: unmeasuredReasons[event] ?? "")
+            return "FOLIUM_BENCH_REPORT \(event) \(line)"
+        }
     }
 }

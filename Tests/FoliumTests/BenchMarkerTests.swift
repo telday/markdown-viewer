@@ -74,6 +74,87 @@ struct BenchMarkerTests {
 
         #expect(line == "FOLIUM_BENCH reload-paint 12.500000\n")
     }
+
+    @Test func isEnabledReflectsTheEnvVar() {
+        #expect(BenchMarker(getenv: { $0 == "FOLIUM_BENCH" ? "1" : nil }).isEnabled)
+        #expect(!BenchMarker(getenv: { _ in nil }).isEnabled)
+    }
+
+    @Test func writeLineIsACompleteNoOpWhenBenchEnvIsUnset() {
+        let sink = RecordingSink()
+        let marker = BenchMarker(getenv: { _ in nil }, write: sink.record)
+
+        marker.writeLine("FOLIUM_BENCH_BUDGET cold-launch 500")
+
+        #expect(sink.writes.isEmpty)
+    }
+
+    @Test func writeLineWritesTheLineVerbatimPlusANewline() {
+        let sink = RecordingSink()
+        let marker = BenchMarker(getenv: { $0 == "FOLIUM_BENCH" ? "1" : nil }, write: sink.record)
+
+        marker.writeLine("FOLIUM_BENCH_BUDGET cold-launch 500")
+
+        #expect(sink.writes.count == 1)
+        let line = String(data: sink.writes[0], encoding: .utf8)
+        #expect(line == "FOLIUM_BENCH_BUDGET cold-launch 500\n")
+    }
+
+    @Test func measureRunsTheBodyAndReturnsItsResultEvenWhenDisabled() {
+        let marker = BenchMarker(getenv: { _ in nil })
+
+        let result = marker.measure("render-start", "render-end", reportAs: "render") { 42 }
+
+        #expect(result == 42)
+    }
+
+    @Test func measureWritesNothingWhenBenchEnvIsUnset() {
+        let sink = RecordingSink()
+        let marker = BenchMarker(getenv: { _ in nil }, write: sink.record)
+
+        _ = marker.measure("render-start", "render-end", reportAs: "render") { "x" }
+
+        #expect(sink.writes.isEmpty)
+    }
+
+    @Test func measureWritesStartEndAndAFullReportLineWhenEnabled() {
+        let sink = RecordingSink()
+        // 0.125 is exact in binary floating point (1/8), so the elapsed
+        // milliseconds land on a round number instead of tripping over
+        // Double's usual rounding — the point of this test is the report
+        // line's content, not float precision.
+        let clock = SequentialClock([100.0, 100.125])
+        let marker = BenchMarker(
+            now: { clock.next() },
+            getenv: { $0 == "FOLIUM_BENCH" ? "1" : nil },
+            write: sink.record
+        )
+
+        let result = marker.measure("render-start", "render-end", reportAs: "render") { "rendered" }
+
+        #expect(result == "rendered")
+        let lines = sink.writes.compactMap { String(data: $0, encoding: .utf8) }
+        #expect(lines.count == 3)
+        #expect(lines[0] == "FOLIUM_BENCH render-start 100.000000\n")
+        #expect(lines[1] == "FOLIUM_BENCH render-end 100.125000\n")
+        #expect(lines[2].hasPrefix("FOLIUM_BENCH_REPORT "))
+        #expect(lines[2].contains("125 ms"))
+    }
+}
+
+/// Hands out fixed timestamps in order, so a test can control what `measure`
+/// sees for its start and end reads without depending on the real clock.
+/// Same `@unchecked Sendable` rationale as `RecordingSink`.
+private final class SequentialClock: @unchecked Sendable {
+    private var values: [Double]
+
+    init(_ values: [Double]) {
+        self.values = values
+    }
+
+    func next() -> Double {
+        values.isEmpty ? 0 : values.removeFirst()
+    }
 }
 
 /// Captures what a `BenchMarker` would have written, without touching the
