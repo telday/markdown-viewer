@@ -38,6 +38,16 @@ ARCH_FLAGS  := --arch arm64 --arch x86_64
 # recipes that use it pay for the extra swift invocation.
 BUILD_DIR    = $(or $(shell swift build -c $(CONFIG) $(ARCH_FLAGS) --show-bin-path), \
                     $(error could not read the products directory from swift build))
+# `make bench` deliberately does not build $(BUILD_DIR): universal builds go
+# through Xcode's build system (see the note above), which applies its own
+# default entitlements. Confirmed by hand — the resulting binary opens the
+# fixture and renders it, but its WKWebView never finishes loading the page
+# shell, so first-paint and reload-paint never fire, and the plain
+# single-architecture binary below does not have the problem. Nothing about
+# this issue needed the universal build anyway: it only has to run on the
+# machine measuring it, not ship to anyone else's.
+BENCH_BUILD_DIR = $(or $(shell swift build -c $(CONFIG) --show-bin-path), \
+                       $(error could not read the products directory from swift build))
 # Assemble the bundle under .build/ so the build artifact isn't left in the
 # project directory, where Spotlight would index it as a second Folium app.
 APP_BUNDLE  := .build/$(APP_NAME).app
@@ -47,7 +57,7 @@ INSTALL_DIR := /Applications
 INSTALLED   := $(INSTALL_DIR)/$(APP_NAME).app
 
 .PHONY: all build bundle verify-bundle install uninstall clean vendor \
-        check lint vet test test-unit test-integration coverage
+        check lint vet test test-unit test-integration coverage bench
 
 all: bundle
 
@@ -132,6 +142,16 @@ bundle: build
 ## Builds nothing — run `make bundle` first. See scripts/verify-bundle.sh.
 verify-bundle:
 	./scripts/verify-bundle.sh "$(APP_BUNDLE)" "$(VERSION)"
+
+## Measure and report latency budgets: cold launch, live-reload, Markdown
+## render. Regenerates the fixture on every run — scripts/bench.sh mutates it
+## in place for the live-reload probe, so a stale one would start already
+## probed. Exits 0 regardless; CI records this as a trend, not a gate. See
+## issue #21.
+bench: vendor
+	./scripts/make-bench-fixture.sh
+	swift build -c $(CONFIG)
+	./scripts/bench.sh .build/bench/fixture.md "$(BENCH_BUILD_DIR)/$(APP_NAME)"
 
 ## Install the bundle to /Applications.
 install: bundle

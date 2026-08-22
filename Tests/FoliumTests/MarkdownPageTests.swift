@@ -131,6 +131,22 @@ struct MarkdownPageTests {
         #expect(script.contains(#"<button type=\"button\" class=\"copy-button\">Copy<\/button>"#))
     }
 
+    // MARK: - paintConfirmationScript
+
+    @Test func paintConfirmationScriptWaitsForTwoAnimationFrames() {
+        // The double requestAnimationFrame is the entire mechanism this
+        // relies on — see the doc comment on why one frame isn't enough. It
+        // has to run via `callAsyncJavaScript`, not `evaluateJavaScript`,
+        // which is why this is a function body (`await` + `return`) rather
+        // than a bare expression — `LiveReloadTests` (integration) proves
+        // `callAsyncJavaScript` actually waits on an `await` before its
+        // callback fires.
+        let script = MarkdownPage.paintConfirmationScript
+        #expect(script.contains("await"))
+        #expect(script.contains("Promise"))
+        #expect(script.components(separatedBy: "requestAnimationFrame").count - 1 == 2)
+    }
+
     // MARK: - scrollScript
 
     @Test func scrollsTheDocumentTheWayTheKeyPointed() {

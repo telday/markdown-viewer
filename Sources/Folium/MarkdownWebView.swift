@@ -32,7 +32,7 @@ struct MarkdownWebView: NSViewRepresentable {
         // open, not just the next one.
         webView.scrollKeys = scrollKeys
         if let ready = context.coordinator.state.render(bodyHTML: bodyHTML) {
-            webView.evaluateJavaScript(MarkdownPage.renderBodyScript(bodyHTML: ready))
+            context.coordinator.inject(ready, into: webView)
         }
     }
 
@@ -54,7 +54,34 @@ struct MarkdownWebView: NSViewRepresentable {
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             guard let queued = state.shellDidFinishLoading() else { return }
-            webView.evaluateJavaScript(MarkdownPage.renderBodyScript(bodyHTML: queued))
+            inject(queued, into: webView)
+        }
+
+        /// Injects rendered body HTML. Outside a bench run this is a single
+        /// `evaluateJavaScript` call with no completion handler, same as
+        /// before this file measured anything. Under FOLIUM_BENCH,
+        /// `MarkdownWebViewState.paintEventToConfirm` names an event to
+        /// confirm and mark, and confirming means chaining
+        /// `MarkdownPage.paintConfirmationScript` through
+        /// `callAsyncJavaScript` — `evaluateJavaScript` does not wait for a
+        /// returned `Promise`, confirmed against a real `WKWebView`;
+        /// `callAsyncJavaScript` runs the string as an `async` function body
+        /// and does wait, on its `await`s.
+        func inject(_ bodyHTML: String, into webView: WKWebView) {
+            let script = MarkdownPage.renderBodyScript(bodyHTML: bodyHTML)
+            guard let event = state.paintEventToConfirm() else {
+                webView.evaluateJavaScript(script)
+                return
+            }
+            webView.evaluateJavaScript(script) { [state] _, _ in
+                Task { @MainActor in
+                    _ = try? await webView.callAsyncJavaScript(
+                        MarkdownPage.paintConfirmationScript,
+                        contentWorld: .page
+                    )
+                    state.benchMarker.mark(event)
+                }
+            }
         }
 
         func webView(

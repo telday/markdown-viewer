@@ -70,6 +70,18 @@ enum MarkdownPage {
         return "window.FoliumRenderBody(\(jsStringLiteral(decorated)))"
     }
 
+    /// An async function body (for `callAsyncJavaScript`, not
+    /// `evaluateJavaScript` — see `MarkdownWebView.inject`) confirming a
+    /// frame has actually been drawn. The browser only runs a
+    /// `requestAnimationFrame` callback right before it paints, so the first
+    /// one lands before this injection's paint and the second lands after
+    /// it — the standard way to learn a frame really landed, not just that
+    /// the script that scheduled it finished running.
+    static let paintConfirmationScript = """
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        return true;
+        """
+
     /// How far one press of a scroll key moves the document, in lines of body
     /// text. `Resources/scroll.js` turns lines into pixels against the
     /// document's own line height, so the step keeps its meaning as the user
