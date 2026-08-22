@@ -39,4 +39,32 @@ struct MarkdownWebViewStateTests {
         // loaded, so a bare re-check delivers nothing stale.
         #expect(state.shellDidFinishLoading() == nil)
     }
+
+    // MARK: - beginReload (issue #19: switching to the remote-content shell)
+
+    @Test func beginReloadMakesRenderQueueAgainInsteadOfInjecting() {
+        let state = MarkdownWebViewState()
+        _ = state.shellDidFinishLoading()
+        // Confirm the shell reads as loaded before the reload...
+        #expect(state.render(bodyHTML: "<p>before</p>") == "<p>before</p>")
+
+        state.beginReload()
+
+        // ...and queues again afterward, the same as a shell that has never
+        // finished its first load.
+        #expect(state.render(bodyHTML: "<p>after reload</p>") == nil)
+    }
+
+    @Test func shellFinishingAfterAReloadDeliversTheContentQueuedDuringIt() {
+        let state = MarkdownWebViewState()
+        _ = state.shellDidFinishLoading()
+        _ = state.render(bodyHTML: "<p>before</p>")
+
+        state.beginReload()
+        _ = state.render(bodyHTML: "<p>queued during reload</p>")
+
+        // Mirrors the first-load path: the new page's own didFinish call
+        // delivers whatever was queued while it was loading.
+        #expect(state.shellDidFinishLoading() == "<p>queued during reload</p>")
+    }
 }

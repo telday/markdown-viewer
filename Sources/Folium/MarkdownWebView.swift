@@ -15,6 +15,11 @@ struct MarkdownWebView: NSViewRepresentable {
     let bodyHTML: String
     let scrollKeys: ScrollKeyBindings
 
+    /// This document's remote-content opt-in (issue #19), driven by
+    /// `RemoteContentState.isAllowed`. `false` until the user clicks "Load"
+    /// in the native bar `DocumentView` shows above this web view.
+    let remoteContentAllowed: Bool
+
     func makeCoordinator() -> Coordinator {
         Coordinator()
     }
@@ -23,7 +28,11 @@ struct MarkdownWebView: NSViewRepresentable {
         let webView = ScrollKeyWebView()
         webView.scrollKeys = scrollKeys
         webView.navigationDelegate = context.coordinator
-        webView.loadFileURL(MarkdownPage.pageURL, allowingReadAccessTo: MarkdownPage.resourceBaseURL)
+        context.coordinator.remoteContentAllowed = remoteContentAllowed
+        webView.loadFileURL(
+            MarkdownPage.shellURL(remoteContentAllowed: remoteContentAllowed),
+            allowingReadAccessTo: MarkdownPage.resourceBaseURL
+        )
         return webView
     }
 
@@ -31,6 +40,25 @@ struct MarkdownWebView: NSViewRepresentable {
         // Rebinding a key in Preferences has to reach the documents already
         // open, not just the next one.
         webView.scrollKeys = scrollKeys
+
+        // The opt-in only ever flips false -> true (RemoteContentState.allow()
+        // is one-way), and never for a document that's already allowed, so
+        // this reload happens at most once per document, on an explicit user
+        // click. That is the one place in this app a full page reload is
+        // acceptable despite MarkdownWebViewState existing specifically to
+        // avoid them: a <meta> CSP is read once when the page parses and
+        // cannot be loosened afterward, so admitting https: requires loading
+        // a different shell file entirely, re-parsing every stylesheet and
+        // re-parsing/recompiling highlight.js in the process.
+        if remoteContentAllowed && !context.coordinator.remoteContentAllowed {
+            context.coordinator.remoteContentAllowed = true
+            context.coordinator.state.beginReload()
+            webView.loadFileURL(
+                MarkdownPage.shellURL(remoteContentAllowed: true),
+                allowingReadAccessTo: MarkdownPage.resourceBaseURL
+            )
+        }
+
         if let ready = context.coordinator.state.render(bodyHTML: bodyHTML) {
             webView.evaluateJavaScript(MarkdownPage.renderBodyScript(bodyHTML: ready))
         }
@@ -42,6 +70,13 @@ struct MarkdownWebView: NSViewRepresentable {
     /// floor at the navigation layer via `decidePolicyFor`.
     final class Coordinator: NSObject, WKNavigationDelegate {
         let state = MarkdownWebViewState()
+
+        /// Which shell is currently loaded (issue #19): `false` for the
+        /// strict `page.html`, `true` for `page-remote.html` after the
+        /// reload `updateNSView` triggers on opt-in. `decidePolicyFor` needs
+        /// this to know which file counts as "the shell navigating to
+        /// itself" versus an actual navigation to police.
+        var remoteContentAllowed = false
 
         /// Opens an external link. Injected, defaulting to the real
         /// `NSWorkspace.shared.open(_:)`, so tests can record what would
@@ -66,7 +101,8 @@ struct MarkdownWebView: NSViewRepresentable {
                 url: navigationAction.request.url,
                 isLinkActivation: navigationAction.navigationType == .linkActivated
             )
-            switch NavigationPolicy.decide(request, shellURL: MarkdownPage.pageURL) {
+            let shellURL = MarkdownPage.shellURL(remoteContentAllowed: remoteContentAllowed)
+            switch NavigationPolicy.decide(request, shellURL: shellURL) {
             case .allow:
                 decisionHandler(.allow)
             case .openInBrowser(let url):

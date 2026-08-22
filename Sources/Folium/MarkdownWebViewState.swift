@@ -33,4 +33,15 @@ final class MarkdownWebViewState {
         }
         return bodyHTML
     }
+
+    /// Call immediately before `loadFileURL` reloads the shell with a
+    /// different page (issue #19: switching to the remote-content-allowed
+    /// shell, since a `<meta>` CSP can't be relaxed once the page has
+    /// parsed). The next `render(bodyHTML:)` call queues its content instead
+    /// of injecting it into the DOM the reload is about to discard; that
+    /// queued content is delivered once `shellDidFinishLoading()` fires
+    /// again for the new page, the same way it is on first load.
+    func beginReload() {
+        isShellLoaded = false
+    }
 }

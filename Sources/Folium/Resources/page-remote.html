@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<!--
+  The relaxed shell for the per-document remote-content opt-in (issue #19).
+  `MarkdownWebView` loads this instead of page.html once a document's "Load
+  remote images" bar is clicked — a <meta> CSP can only be set as the page
+  parses, so admitting https: means loading a different file, not mutating
+  this one. `http:` still isn't admitted anywhere below: only `https:`, and
+  only for img-src/media-src, which is all a document's remote images and
+  video need. Every other directive, and every asset tag, is byte-identical
+  to page.html's — see that file's header comment for why none of them use
+  `'self'` — and MarkdownPageTests.theTwoShellsDifferOnlyInTheCSPMetaLine
+  checks that stays true. That comment is deliberately not this one:
+  page.html's explains page.html's own (fully blocking) CSP, which would be
+  false written here.
+-->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src file:; style-src file:; img-src file: https:; font-src file:; media-src file: https:; base-uri 'none'; form-action 'none';">
+<link rel="stylesheet" href="github.css">
+<link rel="stylesheet" href="../HighlightJS/styles/github.min.css" media="(prefers-color-scheme: light)">
+<link rel="stylesheet" href="../HighlightJS/styles/github-dark.min.css" media="(prefers-color-scheme: dark)">
+<link rel="stylesheet" href="code-block.css">
+<script src="../HighlightJS/highlight.min.js"></script>
+<script src="code-block.js"></script>
+<script src="scroll.js"></script>
+</head>
+<body>
+<article class="markdown-body" id="markdown-content"></article>
+</body>
+</html>

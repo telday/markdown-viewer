@@ -29,9 +29,10 @@ enum NavigationDecision: Equatable {
 /// function rather than grown inside `MarkdownWebView.swift`'s excluded
 /// glue — see `docs/agents/definition-of-done.md`.
 enum NavigationPolicy {
-    /// - Parameter shellURL: `MarkdownPage.pageURL`, the shell's own address.
-    ///   A request whose URL matches this one, fragment aside, is the shell
-    ///   navigating to (or within) itself rather than following a link.
+    /// - Parameter shellURL: `MarkdownPage.shellURL(remoteContentAllowed:)`,
+    ///   the currently loaded shell's own address. A request whose URL
+    ///   matches this one, fragment aside, is the shell navigating to (or
+    ///   within) itself rather than following a link.
     static func decide(_ request: NavigationRequest, shellURL: URL) -> NavigationDecision {
         guard let url = request.url else { return .block }
 
