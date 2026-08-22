@@ -21,6 +21,80 @@ struct MarkdownPageTests {
         #expect(FileManager.default.fileExists(atPath: MarkdownPage.pageURL.path))
     }
 
+    // MARK: - pageURL(remoteContentAllowed:) — issue #19
+
+    @Test func remotePageURLPointsAtTheRealOptInShellFile() {
+        #expect(MarkdownPage.remotePageURL.lastPathComponent == "page-remote.html")
+        #expect(FileManager.default.fileExists(atPath: MarkdownPage.remotePageURL.path))
+    }
+
+    @Test func pageURLSelectionStaysStrictByDefault() {
+        #expect(MarkdownPage.pageURL(remoteContentAllowed: false) == MarkdownPage.pageURL)
+    }
+
+    @Test func pageURLSelectionSwitchesToTheOptInShellWhenAllowed() {
+        #expect(MarkdownPage.pageURL(remoteContentAllowed: true) == MarkdownPage.remotePageURL)
+    }
+
+    // MARK: - Shell drift guard — issue #19
+
+    @Test func theTwoShellsDifferOnlyInTheCSPMetaLine() throws {
+        // Two hand-maintained near-copies of the shell is the real risk
+        // issue #19 takes on by not making the CSP mutable. This is the
+        // test that makes that acceptable: any edit to page.html that isn't
+        // mirrored into page-remote.html (or vice versa) fails here, in
+        // something more precise than "the diff looked large."
+        let strictLines = try String(contentsOf: MarkdownPage.pageURL, encoding: .utf8)
+            .components(separatedBy: .newlines)
+        let remoteLines = try String(contentsOf: MarkdownPage.remotePageURL, encoding: .utf8)
+            .components(separatedBy: .newlines)
+
+        #expect(strictLines.count == remoteLines.count)
+
+        let cspPrefix = #"<meta http-equiv="Content-Security-Policy""#
+        var sawCSPLineDiffer = false
+        for (strictLine, remoteLine) in zip(strictLines, remoteLines) where strictLine != remoteLine {
+            let bothAreCSPLines = strictLine.hasPrefix(cspPrefix) && remoteLine.hasPrefix(cspPrefix)
+            #expect(bothAreCSPLines, "unexpected drift outside the CSP line: \(strictLine) vs \(remoteLine)")
+            sawCSPLineDiffer = true
+        }
+        #expect(sawCSPLineDiffer, "expected the CSP line itself to differ between the two shells")
+    }
+
+    @Test func remoteShellRelaxesOnlyImgAndMediaSrcToAlsoAdmitHTTPS() throws {
+        let cspContent = try cspDirectiveString(of: MarkdownPage.remotePageURL)
+
+        // Never 'self' — see page.html's own doc comment on why that keyword
+        // leaks https on a file:// page. And never http:, per issue #19's
+        // decision that cleartext content stays blocked even after opt-in.
+        // Isolated to the directive string, not the whole file: the doc
+        // comment above the meta tag quotes both tokens by name while
+        // explaining the choice, and a whole-file check would trip over its
+        // own explanation the same way shellDeclaresACSPThatEnforcesThe
+        // NoNetworkFloor's does.
+        #expect(!cspContent.contains("'self'"))
+        #expect(!cspContent.contains("http:"))
+
+        #expect(cspContent.contains("img-src file: https:;"))
+        #expect(cspContent.contains("media-src file: https:;"))
+        // Every other fetch directive is untouched.
+        #expect(cspContent.contains("script-src file:;"))
+        #expect(cspContent.contains("style-src file:;"))
+        #expect(cspContent.contains("font-src file:;"))
+    }
+
+    /// Extracts just the `content="…"` value of the CSP `<meta>` tag from
+    /// `pageURL`'s file — the directive string itself, not the surrounding
+    /// doc comment that quotes CSP fragments (like `'self'`) by name while
+    /// explaining them.
+    private func cspDirectiveString(of pageURL: URL) throws -> String {
+        let shell = try String(contentsOf: pageURL, encoding: .utf8)
+        let openTag = #"<meta http-equiv="Content-Security-Policy" content=""#
+        let cspOpen = try #require(shell.range(of: openTag))
+        let cspClose = try #require(shell.range(of: "\">", range: cspOpen.upperBound..<shell.endIndex))
+        return String(shell[cspOpen.upperBound..<cspClose.lowerBound])
+    }
+
     @Test func shellReferencesEveryAssetByURLWithNoCDNReference() throws {
         let shell = try String(contentsOf: MarkdownPage.pageURL, encoding: .utf8)
 

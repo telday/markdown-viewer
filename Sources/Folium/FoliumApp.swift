@@ -44,14 +44,59 @@ struct FoliumApp: App {
 /// `scripts/coverage.sh` for something with nothing in it to test.
 private struct DocumentView: View {
     @StateObject private var document: LiveDocument
+    // Owned alongside `document` rather than inside `LiveDocument` itself
+    // (issue #19) — see `RemoteContentState`'s doc comment. Not persisted:
+    // a fresh one is created every time a document window opens, which is
+    // what makes "closing and reopening blocks remote content again" true.
+    @StateObject private var remoteContent: RemoteContentState
     @ObservedObject var scrollKeys: ScrollKeyStore
 
     init(text: String, fileURL: URL?, scrollKeys: ScrollKeyStore) {
-        _document = StateObject(wrappedValue: LiveDocument(text: text, fileURL: fileURL))
+        let liveDocument = LiveDocument(text: text, fileURL: fileURL)
+        _document = StateObject(wrappedValue: liveDocument)
+        _remoteContent = StateObject(wrappedValue: RemoteContentState(bodyHTML: liveDocument.bodyHTML))
         self.scrollKeys = scrollKeys
     }
 
     var body: some View {
-        MarkdownWebView(bodyHTML: document.bodyHTML, scrollKeys: scrollKeys.bindings)
+        MarkdownWebView(
+            bodyHTML: document.bodyHTML,
+            scrollKeys: scrollKeys.bindings,
+            remoteContentAllowed: remoteContent.isAllowed
+        )
+        // `initial: true` so a document that already has blocked content on
+        // its very first render shows the bar immediately, not only after
+        // its next live reload — `onChange` alone only fires on a value
+        // that changes, and the first render is the value arriving, not
+        // changing.
+        .onChange(of: document.bodyHTML, initial: true) { _, newBodyHTML in
+            remoteContent.render(bodyHTML: newBodyHTML)
+        }
+        .safeAreaInset(edge: .top) {
+            if remoteContent.hasBlockedContent && !remoteContent.isAllowed {
+                RemoteContentBar(onLoad: remoteContent.allow)
+            }
+        }
+    }
+}
+
+/// The native "Load remote images" affordance (issue #19). CONTEXT.md
+/// priority 1 rules out an HTML banner injected into the document body —
+/// "the document is GitHub's, the chrome is macOS's" — so this is plain
+/// SwiftUI laid over the web view via `.safeAreaInset`, styled like a
+/// toolbar rather than part of the page.
+private struct RemoteContentBar: View {
+    let onLoad: () -> Void
+
+    var body: some View {
+        HStack {
+            Label("This document contains remote images.", systemImage: "photo.on.rectangle.angled")
+                .font(.callout)
+            Spacer()
+            Button("Load", action: onLoad)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(.bar)
     }
 }
