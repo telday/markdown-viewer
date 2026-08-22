@@ -5,14 +5,14 @@ import Testing
 /// Unit tests for benchmark budgets and reporting.
 struct BenchBudgetTests {
     @Test func budgetLookupReturnsCorrectValues() {
-        #expect(BenchBudget.budget(for: "launch") == 500)
+        #expect(BenchBudget.budget(for: "cold-launch") == 500)
         #expect(BenchBudget.budget(for: "reload-paint") == 100)
         #expect(BenchBudget.budget(for: "render") == nil)
         #expect(BenchBudget.budget(for: "unknown") == nil)
     }
 
     @Test func reportLineShowsUnderBudgetAsSuccess() {
-        let line = BenchBudget.reportLine(event: "launch", measuredMs: 250)
+        let line = BenchBudget.reportLine(event: "cold-launch", measuredMs: 250)
         #expect(line.contains("250 ms"))
         #expect(line.contains("✓"))
         #expect(line.contains("Cold launch"))
@@ -20,7 +20,7 @@ struct BenchBudgetTests {
     }
 
     @Test func reportLineShowsAtBudgetAsSuccess() {
-        let line = BenchBudget.reportLine(event: "launch", measuredMs: 500)
+        let line = BenchBudget.reportLine(event: "cold-launch", measuredMs: 500)
         #expect(line.contains("500 ms"))
         #expect(line.contains("✓"))
     }
@@ -46,7 +46,7 @@ struct BenchBudgetTests {
     }
 
     @Test func reportLinesAlignProperlyWithDots() {
-        let line = BenchBudget.reportLine(event: "launch", measuredMs: 250)
+        let line = BenchBudget.reportLine(event: "cold-launch", measuredMs: 250)
         // The line should have dots between the event name and the measurement.
         #expect(line.contains("..."))
     }

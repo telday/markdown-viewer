@@ -1,18 +1,24 @@
 import Foundation
 
 /// Budget thresholds and reporting for latency measurements.
+///
+/// Keyed by **report moment**, not by the raw event names `BenchMarker`
+/// writes to stderr. "cold-launch" is `scripts/bench.sh`'s own wall-clock
+/// reading (taken before it execs the app) subtracted from the `first-paint`
+/// marker — a moment that only exists once the script combines the two, so
+/// it needs its own name here.
 struct BenchBudget {
     /// The budget for each moment, in milliseconds. Only moments with a budget
     /// are enforced; others are measured but not gated.
     static let budgets: [String: Double] = [
-        "launch": 500,           // Cold launch → first document painted
+        "cold-launch": 500,      // Cold launch → first document painted
         "reload-paint": 100      // Live-reload: file written → repainted
         // "render" has no budget — it's informational
     ]
 
     /// The formatted name for each moment, for human-readable reports.
     static let names: [String: String] = [
-        "launch": "Cold launch → first document painted",
+        "cold-launch": "Cold launch → first document painted",
         "reload-paint": "Live-reload: file written → repainted",
         "render": "Markdown → HTML render (fixture)"
     ]

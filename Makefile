@@ -38,6 +38,16 @@ ARCH_FLAGS  := --arch arm64 --arch x86_64
 # recipes that use it pay for the extra swift invocation.
 BUILD_DIR    = $(or $(shell swift build -c $(CONFIG) $(ARCH_FLAGS) --show-bin-path), \
                     $(error could not read the products directory from swift build))
+# `make bench` deliberately does not build $(BUILD_DIR): universal builds go
+# through Xcode's build system (see the note above), which applies its own
+# default entitlements. Confirmed by hand — the resulting binary opens the
+# fixture and renders it, but its WKWebView never finishes loading the page
+# shell, so first-paint and reload-paint never fire, and the plain
+# single-architecture binary below does not have the problem. Nothing about
+# this issue needed the universal build anyway: it only has to run on the
+# machine measuring it, not ship to anyone else's.
+BENCH_BUILD_DIR = $(or $(shell swift build -c $(CONFIG) --show-bin-path), \
+                       $(error could not read the products directory from swift build))
 # Assemble the bundle under .build/ so the build artifact isn't left in the
 # project directory, where Spotlight would index it as a second Folium app.
 APP_BUNDLE  := .build/$(APP_NAME).app
@@ -134,14 +144,21 @@ verify-bundle:
 	./scripts/verify-bundle.sh "$(APP_BUNDLE)" "$(VERSION)"
 
 ## Measure and report latency budgets: cold launch, live-reload, Markdown render.
-## Generates a deterministic ~500 KB fixture, runs the built binary with FOLIUM_BENCH,
-## and prints measured vs budgeted latency. Exits 0 regardless; CI records the numbers
-## as an informational trend, not a gate. See issue #21.
-bench: build .build/bench/fixture.md
-	FOLIUM_BENCH=1 ./scripts/bench.sh .build/bench/fixture.md "$(BUILD_DIR)/$(APP_NAME)"
-
-.build/bench/fixture.md:
+## Builds a single-architecture release binary (see BENCH_BUILD_DIR above —
+## not the universal one `make bundle`/`make install` produce), generates a
+## deterministic ~500 KB fixture, launches the binary with FOLIUM_BENCH
+## (marker instrumentation) and FOLIUM_BENCH_OPEN (opens the fixture on
+## launch), and prints measured vs budgeted latency. Exits 0 regardless; CI
+## records the numbers as an informational trend, not a gate. See issue #21.
+##
+## The fixture is regenerated on every run, not treated as a file target
+## `make` can skip once it exists: scripts/bench.sh appends a live-reload
+## probe line to it in place, so a stale fixture from a previous run would
+## start the next run already mutated, and keep growing across repeated runs.
+bench: vendor
 	./scripts/make-bench-fixture.sh
+	swift build -c $(CONFIG)
+	./scripts/bench.sh .build/bench/fixture.md "$(BENCH_BUILD_DIR)/$(APP_NAME)"
 
 ## Install the bundle to /Applications.
 install: bundle

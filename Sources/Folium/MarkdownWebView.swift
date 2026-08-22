@@ -32,7 +32,7 @@ struct MarkdownWebView: NSViewRepresentable {
         // open, not just the next one.
         webView.scrollKeys = scrollKeys
         if let ready = context.coordinator.state.render(bodyHTML: bodyHTML) {
-            webView.evaluateJavaScript(MarkdownPage.renderBodyScript(bodyHTML: ready))
+            context.coordinator.inject(ready, into: webView)
         }
     }
 
@@ -54,7 +54,29 @@ struct MarkdownWebView: NSViewRepresentable {
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             guard let queued = state.shellDidFinishLoading() else { return }
-            webView.evaluateJavaScript(MarkdownPage.renderBodyScript(bodyHTML: queued))
+            inject(queued, into: webView)
+        }
+
+        /// Injects rendered body HTML. For the document's first paint only,
+        /// chains `MarkdownPage.paintConfirmationScript` — run via
+        /// `callAsyncJavaScript` rather than `evaluateJavaScript`, because
+        /// (confirmed against a real `WKWebView`) `evaluateJavaScript` does
+        /// not wait for a returned `Promise`; only `callAsyncJavaScript`,
+        /// which runs the string as an `async` function body, waits for its
+        /// `await`s before calling back. `first-paint` is marked from that
+        /// callback rather than this call's. See `MarkdownWebViewState
+        /// .shouldConfirmFirstPaint` for why later injections skip this.
+        func inject(_ bodyHTML: String, into webView: WKWebView) {
+            webView.evaluateJavaScript(MarkdownPage.renderBodyScript(bodyHTML: bodyHTML)) { [state] _, _ in
+                guard state.shouldConfirmFirstPaint() else { return }
+                Task { @MainActor in
+                    _ = try? await webView.callAsyncJavaScript(
+                        MarkdownPage.paintConfirmationScript,
+                        contentWorld: .page
+                    )
+                    state.benchMarker.mark("first-paint")
+                }
+            }
         }
 
         func webView(

@@ -12,7 +12,7 @@
 final class MarkdownWebViewState {
     private var isShellLoaded = false
     private var pendingBodyHTML: String?
-    private var hasEmittedFirstPaint = false
+    private var hasConfirmedFirstPaint = false
     var benchMarker: BenchMarker = BenchMarker()
 
     /// Call when the shell's one-time `WKNavigationDelegate` `didFinish`
@@ -33,7 +33,25 @@ final class MarkdownWebViewState {
             pendingBodyHTML = bodyHTML
             return nil
         }
-        if !hasEmittedFirstPaint { benchMarker.mark("first-paint"); hasEmittedFirstPaint = true }
         return bodyHTML
+    }
+
+    /// One-shot latch: `true` only the first time it is called, `false`
+    /// every time after. `MarkdownWebView` calls this after an injection
+    /// completes and the browser has confirmed a frame was actually drawn,
+    /// and only marks `first-paint` when it answers `true` — the decision of
+    /// *whether* an injection counts as the first paint lives here, where it
+    /// can be unit-tested, while confirming the paint itself needs a real
+    /// `WKWebView` and stays in that excluded glue file.
+    ///
+    /// Only the document's first paint is worth this round trip. Every
+    /// injection after that is a live-reload, and its own speed is already
+    /// measured by `LiveDocument`'s `reload-paint` marker — confirming a
+    /// paint costs two animation frames, and paying that on every reload
+    /// would eat into the 100 ms budget for a number nothing needs.
+    func shouldConfirmFirstPaint() -> Bool {
+        guard !hasConfirmedFirstPaint else { return false }
+        hasConfirmedFirstPaint = true
+        return true
     }
 }

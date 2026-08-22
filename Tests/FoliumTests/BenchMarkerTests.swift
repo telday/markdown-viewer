@@ -2,69 +2,108 @@ import Foundation
 import Testing
 @testable import Folium
 
-/// Unit tests for BenchMarker instrumentation.
+/// Unit tests for `BenchMarker`. `write` and `now` are injected so these can
+/// assert on the exact bytes that would go to stderr, rather than the
+/// `#expect(true)` placeholders a real `FileHandle` would have forced.
 struct BenchMarkerTests {
-    @Test func whenBenchEnvIsUnsetMarkingIsACompleteNoOp() {
+    @Test func isACompleteNoOpWhenBenchEnvIsUnset() {
+        let sink = RecordingSink()
+        let clockReads = Counter()
         let marker = BenchMarker(
-            clock: { 1.234 },
-            getenv: { _ in nil }  // FOLIUM_BENCH is unset
+            now: { clockReads.increment(); return 1.0 },
+            getenv: { _ in nil },
+            write: sink.record
         )
 
-        // Capture stderr to verify nothing is written.
-        // We can't fully test this without redirecting stderr, but we can
-        // at least verify the logic path doesn't allocate or format when
-        // the env var is missing. The guard ensures early return.
-        marker.mark("test-event")
+        marker.mark("first-paint")
 
-        // With the env var unset, getenv returns nil, so mark() returns early.
-        // A real no-op test would require stderr redirection at the test level,
-        // which is beyond what unit tests can do cleanly. The integration test
-        // running the full app with FOLIUM_BENCH set verifies output actually
-        // happens.
-        #expect(true)
+        #expect(sink.writes.isEmpty)
+        // No clock read either: an event that never gets written shouldn't
+        // even pay for a timestamp.
+        #expect(clockReads.total == 0)
     }
 
-    @Test func whenBenchEnvIsSetMarkingFormatsTheEvent() {
+    @Test func writesAFormattedLineWhenBenchEnvIsSet() {
+        let sink = RecordingSink()
         let marker = BenchMarker(
-            clock: { 1.500 },
-            getenv: { env in env == "FOLIUM_BENCH" ? "1" : nil }
+            now: { 1_700_000_000.123456 },
+            getenv: { $0 == "FOLIUM_BENCH" ? "1" : nil },
+            write: sink.record
         )
 
-        // The actual write to stderr happens, but we can't easily capture it
-        // in a unit test without deeper mocking. The orchestration script
-        // verifies the format by parsing it.
-        marker.mark("launch")
+        marker.mark("first-paint")
 
-        // This test verifies the logic path is reached when env var is set.
-        // Real format verification happens in the bench script's parsing.
-        #expect(true)
+        #expect(sink.writes.count == 1)
+        let line = String(data: sink.writes[0], encoding: .utf8)
+        #expect(line == "FOLIUM_BENCH first-paint 1700000000.123456\n")
     }
 
-    @Test func elapsedTimeIsFormattedTo3DecimalPlaces() {
-        // The format string uses "%.3f", which should produce three decimal
-        // places. This is verified by the orchestration script when it parses
-        // the output and calculates elapsed time between events.
+    @Test func looksUpExactlyTheFoliumBenchKey() {
+        let lookups = StringLog()
         let marker = BenchMarker(
-            clock: { 1.2345 },
-            getenv: { env in env == "FOLIUM_BENCH" ? "1" : nil }
+            now: { 0 },
+            getenv: { lookups.record($0); return nil },
+            write: { _ in }
         )
 
         marker.mark("render-start")
 
-        // Format verification happens in the script that parses the output.
-        #expect(true)
+        #expect(lookups.entries == ["FOLIUM_BENCH"])
     }
 
-    @Test func eventNamesArePassedThrough() {
+    @Test func hasNoSharedStateAcrossCalls() {
+        // BenchMarker used to latch a "launch already emitted" flag in a
+        // global. Rewritten to be stateless, so calling it many times, in
+        // any order, writes one line per call — nothing carries over.
+        let sink = RecordingSink()
         let marker = BenchMarker(
-            clock: { 0.0 },
-            getenv: { env in env == "FOLIUM_BENCH" ? "1" : nil }
+            now: { 5.0 },
+            getenv: { $0 == "FOLIUM_BENCH" ? "1" : nil },
+            write: sink.record
         )
 
-        // The event name is embedded in the output line. The orchestration
-        // script verifies it by parsing "FOLIUM_BENCH <event> <time>".
-        marker.mark("first-paint")
+        marker.mark("render-start")
+        marker.mark("render-start")
+        marker.mark("render-end")
 
-        #expect(true)
+        #expect(sink.writes.count == 3)
+    }
+
+    @Test func formatMarkerLineEmbedsTheEventNameAndSixDecimalTimestamp() {
+        let line = BenchMarker.formatMarkerLine(event: "reload-paint", timestamp: 12.5)
+
+        #expect(line == "FOLIUM_BENCH reload-paint 12.500000\n")
+    }
+}
+
+/// Captures what a `BenchMarker` would have written, without touching the
+/// real file descriptor. `@unchecked Sendable`: a stored `@Sendable`
+/// property on `BenchMarker` needs a Sendable closure, and this test double
+/// is only ever touched from one thread within a single test.
+private final class RecordingSink: @unchecked Sendable {
+    private(set) var writes: [Data] = []
+
+    func record(_ data: Data) {
+        writes.append(data)
+    }
+}
+
+/// Records the strings a `getenv` stub was asked to look up. Same
+/// `@unchecked Sendable` rationale as `RecordingSink`.
+private final class StringLog: @unchecked Sendable {
+    private(set) var entries: [String] = []
+
+    func record(_ value: String) {
+        entries.append(value)
+    }
+}
+
+/// A plain call counter. Same `@unchecked Sendable` rationale as
+/// `RecordingSink`.
+private final class Counter: @unchecked Sendable {
+    private(set) var total = 0
+
+    func increment() {
+        total += 1
     }
 }

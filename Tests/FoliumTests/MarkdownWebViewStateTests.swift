@@ -39,4 +39,12 @@ struct MarkdownWebViewStateTests {
         // loaded, so a bare re-check delivers nothing stale.
         #expect(state.shellDidFinishLoading() == nil)
     }
+
+    @Test func shouldConfirmFirstPaintIsTrueOnlyTheFirstTime() {
+        let state = MarkdownWebViewState()
+
+        #expect(state.shouldConfirmFirstPaint())
+        #expect(!state.shouldConfirmFirstPaint())
+        #expect(!state.shouldConfirmFirstPaint())
+    }
 }

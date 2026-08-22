@@ -14,6 +14,12 @@ OUTPUT_FILE="$OUTPUT_DIR/fixture.md"
 TEMP_FILE=$(mktemp)
 trap "rm -f $TEMP_FILE" EXIT
 
+# Saved so the closing status line below can reach the terminal instead of
+# the fixture: `exec >` redirects stdout for the rest of this shell, and
+# after `mv` moves $TEMP_FILE to $OUTPUT_FILE, fd 1 is still the same open
+# file — now reachable at the new path — so anything written after the move
+# without restoring fd 1 first lands inside the "finished" fixture.
+exec 3>&1
 exec > "$TEMP_FILE"
 
 # Header and introduction.
@@ -381,6 +387,9 @@ Generated deterministically for reproducible performance measurements across run
 
 *End of fixture document.*
 EOF
+
+# Restore the real stdout before anything further is written.
+exec 1>&3 3>&-
 
 # Move the temp file to the output location atomically.
 mv "$TEMP_FILE" "$OUTPUT_FILE"
