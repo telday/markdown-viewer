@@ -33,7 +33,7 @@ final class LiveDocument: ObservableObject {
         scheduler: any ReloadScheduler = SleepingReloadScheduler()
     ) {
         self.fileURL = fileURL
-        bodyHTML = MarkdownRenderer.renderHTML(from: text)
+        bodyHTML = LiveDocument.rendered(from: text, fileURL: fileURL)
 
         guard let fileURL else { return }
         coalescer = ReloadCoalescer(scheduler: scheduler) { [weak self] in
@@ -66,10 +66,22 @@ final class LiveDocument: ObservableObject {
         guard let fileURL, let data = try? Data(contentsOf: fileURL) else { return }
         guard let text = try? MarkdownLoading.text(fromUTF8: data) else { return }
 
-        let rendered = MarkdownRenderer.renderHTML(from: text)
+        let rendered = LiveDocument.rendered(from: text, fileURL: fileURL)
         // `touch`, chmod, or a save of unchanged bytes: no publish, no
         // injection into the web view, no repaint.
         guard rendered != bodyHTML else { return }
         bodyHTML = rendered
+    }
+
+    /// Renders `text` and, if the document has a real file behind it,
+    /// resolves its `src`/`href` values against the file's own directory
+    /// (`DocumentRelativeLinks`, issue #18) so sibling images and links
+    /// work. A document with nothing on disk — `DocumentGroup` can hand
+    /// over one of these — has no directory to resolve against, so it
+    /// simply keeps whatever relative references the render produced.
+    private static func rendered(from text: String, fileURL: URL?) -> String {
+        let html = MarkdownRenderer.renderHTML(from: text)
+        guard let directory = fileURL?.deletingLastPathComponent() else { return html }
+        return DocumentRelativeLinks.resolve(html, relativeTo: directory)
     }
 }
